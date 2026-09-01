@@ -13,6 +13,19 @@ export async function getFleetAccess(businessId: string) {
   return unwrap(Boolean(data), error);
 }
 
+export async function getFleetProductAccess(businessId: string) {
+  const [{ data: access, error: accessError }, { data: service, error: serviceError }] = await Promise.all([
+    client().rpc('get_business_product_access', { p_business_id: businessId }),
+    client().rpc('get_business_service_entitlement', { p_business_id: businessId }),
+  ]);
+  if (accessError) throw new Error(accessError.message);
+  if (serviceError) throw new Error(serviceError.message);
+  return {
+    productAccess: Array.isArray(access) ? access[0] ?? null : access,
+    serviceEntitlement: service ?? null,
+  };
+}
+
 export async function getFleetDashboard(businessId: string) {
   const { data, error } = await client().rpc('fleet_dashboard_summary_v2', { p_business_id: businessId });
   return unwrap(data as Record<string, unknown> | null, error);
@@ -24,16 +37,17 @@ export async function getCurrentDispatch(businessId: string) {
 }
 
 export async function getFleetIntelligence(businessId: string) {
-  const [ops, prevention, risk, metrics, config, values] = await Promise.all([
+  const [ops, prevention, risk, effectiveness, metrics, config, values] = await Promise.all([
     client().rpc('fleet_operations_exception_intelligence', { p_business_id: businessId, p_window_hours: 24 }),
     client().rpc('fleet_restroom_preventive_schedule', { p_business_id: businessId, p_days: 90 }),
     client().rpc('fleet_restroom_remediation_risk', { p_business_id: businessId, p_days: 90 }),
+    client().rpc('fleet_restroom_prevention_effectiveness', { p_business_id: businessId, p_days: 90 }),
     client().rpc('get_fleet_metric_capabilities', { p_business_id: businessId }),
     client().rpc('get_fleet_metric_configuration', { p_business_id: businessId }),
     client().rpc('get_fleet_metric_values', { p_business_id: businessId, p_as_of: new Date().toISOString().slice(0, 10) }),
   ]);
-  for (const result of [ops, prevention, risk, metrics, config, values]) if (result.error) throw new Error(result.error.message);
-  return { operations: ops.data, prevention: prevention.data, remediationRisk: risk.data, metricCapabilities: metrics.data, metricConfiguration: config.data, metricValues: values.data };
+  for (const result of [ops, prevention, risk, effectiveness, metrics, config, values]) if (result.error) throw new Error(result.error.message);
+  return { operations: ops.data, prevention: prevention.data, remediationRisk: risk.data, preventionEffectiveness: effectiveness.data, metricCapabilities: metrics.data, metricConfiguration: config.data, metricValues: values.data };
 }
 
 export async function createVehicle(businessId: string, input: Record<string, unknown>) {
