@@ -10,6 +10,7 @@ export default function RootLayout() {
         <Stack.Screen name="index" options={{ title: 'Fleet Control Center' }} />
         <Stack.Screen name="operations" options={{ title: 'Fleet Operations' }} />
         <Stack.Screen name="intelligence" options={{ title: 'Fleet Intelligence' }} />
+        <Stack.Screen name="premium" options={{ title: 'Fleet Premium' }} />
       </Stack>
     </FleetWorkspaceProvider>
   );
