@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
-import { getCurrentDispatch, getFleetAccess, getFleetDashboard, getFleetIntelligence } from '@/services/fleet';
+import { getCurrentDispatch, getFleetAccess, getFleetDashboard, getFleetIntelligence, getFleetProductAccess } from '@/services/fleet';
 
 type Workspace = { business_id: string; business_name?: string | null; name?: string | null; role?: string | null; [key: string]: unknown };
 type State = {
@@ -8,6 +8,7 @@ type State = {
   dashboard: Record<string, unknown> | null;
   dispatch: Record<string, unknown> | null;
   intelligence: Record<string, unknown> | null;
+  entitlement: Record<string, unknown> | null;
   loading: boolean;
   refreshing: boolean;
   error: string | null;
@@ -21,6 +22,7 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
   const [dashboard, setDashboard] = useState<Record<string, unknown> | null>(null);
   const [dispatch, setDispatch] = useState<Record<string, unknown> | null>(null);
   const [intelligence, setIntelligence] = useState<Record<string, unknown> | null>(null);
+  const [entitlement, setEntitlement] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,15 +42,17 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
     }
     if (!selected) throw new Error('No Fleet-enabled Business workspace is available for this account.');
     const businessId = selected.business_id;
-    const [nextDashboard, nextDispatch, nextIntelligence] = await Promise.all([
+    const [nextDashboard, nextDispatch, nextIntelligence, nextEntitlement] = await Promise.all([
       getFleetDashboard(businessId),
       getCurrentDispatch(businessId),
       getFleetIntelligence(businessId),
+      getFleetProductAccess(businessId),
     ]);
     setWorkspace(selected);
     setDashboard(nextDashboard);
     setDispatch(nextDispatch);
     setIntelligence(nextIntelligence as unknown as Record<string, unknown>);
+    setEntitlement(nextEntitlement as unknown as Record<string, unknown>);
   }, []);
 
   useEffect(() => {
@@ -61,7 +65,7 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
     try { await hydrate(); } finally { setRefreshing(false); }
   }, [hydrate]);
 
-  const value = useMemo(() => ({ workspace, dashboard, dispatch, intelligence, loading, refreshing, error, refresh }), [workspace, dashboard, dispatch, intelligence, loading, refreshing, error, refresh]);
+  const value = useMemo(() => ({ workspace, dashboard, dispatch, intelligence, entitlement, loading, refreshing, error, refresh }), [workspace, dashboard, dispatch, intelligence, entitlement, loading, refreshing, error, refresh]);
   return <FleetWorkspaceContext.Provider value={value}>{children}</FleetWorkspaceContext.Provider>;
 }
 
