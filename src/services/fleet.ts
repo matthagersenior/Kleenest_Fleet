@@ -50,6 +50,24 @@ export async function getFleetIntelligence(businessId: string) {
   return { operations: ops.data, prevention: prevention.data, remediationRisk: risk.data, preventionEffectiveness: effectiveness.data, metricCapabilities: metrics.data, metricConfiguration: config.data, metricValues: values.data };
 }
 
+export async function listFleetInventory(businessId: string) {
+  const [vehicles, drivers, routes, maintenance, alerts] = await Promise.all([
+    client().from('fleet_vehicles').select('*').eq('business_id', businessId).order('created_at', { ascending: false }),
+    client().from('fleet_drivers').select('*').eq('business_id', businessId).order('created_at', { ascending: false }),
+    client().from('fleet_routes').select('*').eq('business_id', businessId).order('created_at', { ascending: false }),
+    client().from('fleet_maintenance_records').select('*').eq('business_id', businessId).order('created_at', { ascending: false }),
+    client().rpc('fleet_exception_alerts', { p_business_id: businessId, p_status: null, p_limit: 100 }),
+  ]);
+  for (const result of [vehicles, drivers, routes, maintenance, alerts]) if (result.error) throw new Error(result.error.message);
+  return {
+    vehicles: vehicles.data ?? [],
+    drivers: drivers.data ?? [],
+    routes: routes.data ?? [],
+    maintenance: maintenance.data ?? [],
+    alerts: alerts.data ?? [],
+  };
+}
+
 export async function createVehicle(businessId: string, input: Record<string, unknown>) {
   const { data, error } = await client().rpc('fleet_create_vehicle', {
     p_business_id: businessId,
@@ -66,6 +84,11 @@ export async function createVehicle(businessId: string, input: Record<string, un
   return unwrap(data, error);
 }
 
+export async function setVehicleStatus(businessId: string, vehicleId: string, status: string) {
+  const { data, error } = await client().rpc('fleet_set_vehicle_status', { p_business_id: businessId, p_vehicle_id: vehicleId, p_status: status });
+  return unwrap(data, error);
+}
+
 export async function createDriver(businessId: string, input: Record<string, unknown>) {
   const { data, error } = await client().rpc('fleet_create_driver', {
     p_business_id: businessId,
@@ -76,6 +99,11 @@ export async function createDriver(businessId: string, input: Record<string, unk
     p_vehicle_id: input.vehicle_id ?? null,
     p_metadata: input.metadata ?? {},
   });
+  return unwrap(data, error);
+}
+
+export async function setDriverStatus(businessId: string, driverId: string, status: string) {
+  const { data, error } = await client().rpc('fleet_set_driver_status', { p_business_id: businessId, p_driver_id: driverId, p_status: status });
   return unwrap(data, error);
 }
 
@@ -105,6 +133,11 @@ export async function dispatchRoute(businessId: string, routeId: string) {
   return unwrap(data, error);
 }
 
+export async function getDispatchIntelligence(businessId: string, routeId: string, limit = 20) {
+  const { data, error } = await client().rpc('fleet_dispatch_intelligence', { p_business_id: businessId, p_route_id: routeId, p_limit: limit });
+  return unwrap(data as Record<string, unknown> | null, error);
+}
+
 export async function recordRouteStopTiming(businessId: string, routeId: string, routeStopId: string, eventType: string, occurredAt = new Date().toISOString()) {
   const { data, error } = await client().rpc('fleet_record_route_stop_timing', { p_business_id: businessId, p_route_id: routeId, p_route_stop_id: routeStopId, p_event_type: eventType, p_occurred_at: occurredAt });
   return unwrap(data, error);
@@ -123,6 +156,16 @@ export async function getRouteExceptionDetail(businessId: string, routeId: strin
 export async function listFleetAlerts(businessId: string, status: string | null = null, limit = 100) {
   const { data, error } = await client().rpc('fleet_exception_alerts', { p_business_id: businessId, p_status: status, p_limit: limit });
   return unwrap(data ?? [], error);
+}
+
+export async function resolveFleetAlert(businessId: string, alertId: string, resolution: string) {
+  const { data, error } = await client().rpc('fleet_resolve_alert', { p_business_id: businessId, p_alert_id: alertId, p_resolution: resolution });
+  return unwrap(data, error);
+}
+
+export async function completeMaintenance(businessId: string, maintenanceId: string, notes = 'Completed in Kleenest Fleet') {
+  const { data, error } = await client().rpc('fleet_complete_maintenance', { p_business_id: businessId, p_maintenance_id: maintenanceId, p_notes: notes });
+  return unwrap(data, error);
 }
 
 export async function updateDispatchPolicy(businessId: string, policy: { occupancyEnabled: boolean; occupancyFreshMinutes: number; highUtilizationPct: number; queueThreshold: number; highUtilizationWeight: number; queueWeight: number }) {
@@ -148,4 +191,35 @@ export async function updateExceptionPolicy(businessId: string, policy: { lateSt
     p_notify_critical: policy.notifyCritical,
   });
   return unwrap(data as Record<string, unknown> | null, error);
+}
+
+export type FleetPremiumMember = {
+  id: string;
+  business_id: string;
+  user_id: string;
+  status: 'active' | 'revoked';
+  granted_at: string;
+  revoked_at: string | null;
+  display_name?: string | null;
+  username?: string | null;
+  metadata?: Record<string, unknown>;
+};
+
+export async function listFleetPremiumMembers(businessId: string): Promise<FleetPremiumMember[]> {
+  const { data, error } = await client().rpc('fleet_list_premium_members', { p_business_id: businessId });
+  return unwrap((Array.isArray(data) ? data : []) as FleetPremiumMember[], error);
+}
+
+export async function grantFleetPremiumByEmail(businessId: string, email: string) {
+  const { data, error } = await client().rpc('fleet_grant_premium_member_by_email', {
+    p_business_id: businessId,
+    p_email: email.trim(),
+    p_metadata: { source: 'kleenest_fleet_app' },
+  });
+  return unwrap(data, error);
+}
+
+export async function revokeFleetPremiumMember(businessId: string, userId: string) {
+  const { data, error } = await client().rpc('fleet_revoke_premium_member', { p_business_id: businessId, p_user_id: userId });
+  return unwrap(data, error);
 }
