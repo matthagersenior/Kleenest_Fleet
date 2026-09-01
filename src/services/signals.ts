@@ -1,73 +1,19 @@
 import { getSupabaseClient } from '@/lib/supabase';
-
-const client = () => getSupabaseClient();
-function unwrap<T>(data: T | null, error: { message: string } | null): T { if (error) throw new Error(error.message); if (data == null) throw new Error('Fleet signals service returned no data.'); return data; }
-
-export async function listBusinessLocations(businessId: string) {
-  const { data, error } = await client().rpc('business_list_locations', { p_business_id: businessId });
-  return unwrap(data ?? [], error);
-}
-
-export async function listMonitoredLocations(businessId: string) {
-  const { data, error } = await client().rpc('fleet_list_monitored_locations', { p_business_id: businessId });
-  return unwrap((Array.isArray(data) ? data : []) as any[], error);
-}
-
-export async function setMonitoredLocation(businessId: string, locationId: string, enabled = true) {
-  const { data, error } = await client().rpc('fleet_set_monitored_location', { p_business_id: businessId, p_location_id: locationId, p_enabled: enabled });
-  return unwrap(data, error);
-}
-
-export async function removeMonitoredLocation(businessId: string, locationId: string) {
-  const { data, error } = await client().rpc('fleet_remove_monitored_location', { p_business_id: businessId, p_location_id: locationId });
-  return unwrap(Boolean(data), error);
-}
-
-export async function getOccupancySummary(locationId: string) {
-  const { data, error } = await client().rpc('get_location_occupancy_summary', { p_location_id: locationId });
-  return unwrap(data as Record<string, unknown> | null, error);
-}
-
-export async function listBusinessGeofences(businessId: string) {
-  const { data, error } = await client().from('business_geofences').select('*').eq('business_id', businessId).order('created_at', { ascending: false });
-  return unwrap(data ?? [], error);
-}
-
-export async function configureGeofence(geofenceId: string, input: { radiusMeters?: number; notificationEnabled?: boolean; title?: string; body?: string; active?: boolean }) {
-  const { data, error } = await client().rpc('configure_business_geofence', {
-    p_geofence_id: geofenceId,
-    p_radius_meters: input.radiusMeters ?? null,
-    p_notification_enabled: input.notificationEnabled ?? null,
-    p_notification_payload: input.title || input.body ? { title: input.title ?? null, body: input.body ?? null, trigger: 'enter' } : null,
-    p_active: input.active ?? null,
-  });
-  return unwrap(data, error);
-}
-
-export async function publishRouteNotification(routeId: string, eventType: string, title: string, body: string, payload: Record<string, unknown> = {}) {
-  const { data, error } = await client().rpc('publish_fleet_route_notification', { p_route_id: routeId, p_event_type: eventType, p_title: title, p_body: body, p_payload: payload });
-  return unwrap(String(data), error);
-}
-
-export async function listOfflinePacks(businessId: string) {
-  const { data, error } = await client().from('offline_packs').select('*').eq('business_id', businessId).order('created_at', { ascending: false });
-  return unwrap(data ?? [], error);
-}
-
-export async function createFleetOfflinePack(businessId: string, name = 'Fleet offline pack') {
-  const { data, error } = await client().rpc('create_offline_pack', {
-    p_pack_type: 'business', p_name: name, p_business_id: businessId, p_route_discovery_session_id: null,
-    p_west: null, p_south: null, p_east: null, p_north: null, p_expires_hours: 72,
-  });
-  return unwrap(data, error);
-}
-
-export async function queueOfflineFleetEvent(packId: string, eventType: string, payload: Record<string, unknown>, clientEventId: string) {
-  const { data, error } = await client().rpc('queue_offline_pack_event', { p_pack_id: packId, p_event_type: eventType, p_payload: payload, p_client_event_id: clientEventId });
-  return unwrap(data, error);
-}
-
-export async function listOfflinePackEvents(packId: string) {
-  const { data, error } = await client().from('offline_pack_events').select('*').eq('pack_id', packId).order('created_at', { ascending: false });
-  return unwrap(data ?? [], error);
-}
+const client=()=>getSupabaseClient();
+function unwrap<T>(data:T|null,error:{message:string}|null):T{if(error)throw new Error(error.message);if(data==null)throw new Error('Fleet signals service returned no data.');return data;}
+export async function listBusinessLocations(businessId:string){const{data,error}=await client().rpc('business_list_locations',{p_business_id:businessId});return unwrap(data??[],error);}
+export async function listMonitoredLocations(businessId:string){const{data,error}=await client().rpc('fleet_list_monitored_locations',{p_business_id:businessId});return unwrap((Array.isArray(data)?data:[]) as any[],error);}
+export async function setMonitoredLocation(businessId:string,locationId:string,enabled=true){const{data,error}=await client().rpc('fleet_set_monitored_location',{p_business_id:businessId,p_location_id:locationId,p_enabled:enabled});return unwrap(data,error);}
+export async function removeMonitoredLocation(businessId:string,locationId:string){const{data,error}=await client().rpc('fleet_remove_monitored_location',{p_business_id:businessId,p_location_id:locationId});return unwrap(Boolean(data),error);}
+export async function getOccupancySummary(locationId:string){const{data,error}=await client().rpc('get_location_occupancy_summary',{p_location_id:locationId});return unwrap(data as Record<string,unknown>|null,error);}
+export async function listBusinessGeofences(businessId:string){const{data,error}=await client().from('business_geofences').select('*').eq('business_id',businessId).order('created_at',{ascending:false});return unwrap(data??[],error);}
+export async function configureGeofence(geofenceId:string,input:{radiusMeters?:number;notificationEnabled?:boolean;title?:string;body?:string;active?:boolean}){const{data,error}=await client().rpc('configure_business_geofence',{p_geofence_id:geofenceId,p_radius_meters:input.radiusMeters??null,p_notification_enabled:input.notificationEnabled??null,p_notification_payload:input.title||input.body?{title:input.title??null,body:input.body??null,trigger:'enter'}:null,p_active:input.active??null});return unwrap(data,error);}
+export async function publishRouteNotification(routeId:string,eventType:string,title:string,body:string,payload:Record<string,unknown>={}){const{data,error}=await client().rpc('publish_fleet_route_notification',{p_route_id:routeId,p_event_type:eventType,p_title:title,p_body:body,p_payload:payload});return unwrap(String(data),error);}
+export async function recordFleetOperationalEvent(businessId:string,eventType:string,payload:Record<string,unknown>={}){const{data,error}=await client().rpc('record_fleet_operational_event',{p_business_id:businessId,p_event_type:eventType,p_payload:payload});return unwrap(String(data),error);}
+export async function listFleetOperationalEvents(businessId:string,limit=100){const{data,error}=await client().from('fleet_operational_events').select('*').eq('business_id',businessId).order('created_at',{ascending:false}).limit(limit);return unwrap(data??[],error);}
+export async function listOfflinePacks(businessId:string){const{data,error}=await client().from('offline_packs').select('*').eq('business_id',businessId).order('created_at',{ascending:false});return unwrap(data??[],error);}
+export async function createFleetOfflinePack(businessId:string,name='Fleet offline pack'){const{data,error}=await client().rpc('create_offline_pack',{p_pack_type:'business',p_name:name,p_business_id:businessId,p_route_discovery_session_id:null,p_west:null,p_south:null,p_east:null,p_north:null,p_expires_hours:72});return unwrap(data,error);}
+export async function queueOfflineFleetEvent(packId:string,eventType:string,payload:Record<string,unknown>,clientEventId:string){const{data,error}=await client().rpc('queue_offline_pack_event',{p_pack_id:packId,p_event_type:eventType,p_payload:payload,p_client_event_id:clientEventId});return unwrap(data,error);}
+export async function listOfflinePackEvents(packId:string){const{data,error}=await client().from('offline_pack_events').select('*').eq('pack_id',packId).order('created_at',{ascending:false});return unwrap(data??[],error);}
+export async function queueOperationalCheckpoint(packId:string,businessId:string,clientEventId:string){return queueOfflineFleetEvent(packId,'fleet_operational_checkpoint',{business_id:businessId,source:'kleenest_fleet_app',event_type:'fleet_operational_checkpoint'},clientEventId);}
+export async function publishOperationalCheckpoint(businessId:string,packId?:string|null){return recordFleetOperationalEvent(businessId,'fleet_operational_checkpoint',{source:'kleenest_fleet_app',offline_pack_id:packId??null});}
