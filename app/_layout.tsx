@@ -10,6 +10,8 @@ export default function RootLayout() {
         <Stack.Screen name="index" options={{ title: 'Fleet Control Center' }} />
         <Stack.Screen name="operations" options={{ title: 'Fleet Operations' }} />
         <Stack.Screen name="execution" options={{ title: 'Route Execution' }} />
+        <Stack.Screen name="signals" options={{ title: 'Fleet Signals' }} />
+        <Stack.Screen name="sync" options={{ title: 'Offline & Notifications' }} />
         <Stack.Screen name="intelligence" options={{ title: 'Fleet Intelligence' }} />
         <Stack.Screen name="metrics" options={{ title: 'Fleet Metrics' }} />
         <Stack.Screen name="premium" options={{ title: 'Fleet Premium' }} />
