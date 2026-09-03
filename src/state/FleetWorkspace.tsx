@@ -2,9 +2,10 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { getSupabaseClient } from '@/lib/supabase';
 import { getCurrentDispatch, getFleetAccess, getFleetDashboard, getFleetIntelligence, getFleetProductAccess } from '@/services/fleet';
 
-type Workspace = { business_id: string; business_name?: string | null; name?: string | null; role?: string | null; [key: string]: unknown };
+type Workspace = { business_id: string; business_name?: string | null; name?: string | null; role?: string | null; business_tier?: string | null; [key: string]: unknown };
 type State = {
   workspace: Workspace | null;
+  workspaces: Workspace[];
   dashboard: Record<string, unknown> | null;
   dispatch: Record<string, unknown> | null;
   intelligence: Record<string, unknown> | null;
@@ -13,11 +14,24 @@ type State = {
   refreshing: boolean;
   error: string | null;
   refresh: () => Promise<void>;
+  selectWorkspace: (businessId: string) => Promise<void>;
 };
 
 const FleetWorkspaceContext = createContext<State | null>(null);
 
+async function loadWorkspaceData(selected: Workspace) {
+  const businessId = selected.business_id;
+  const [dashboard, dispatch, intelligence, entitlement] = await Promise.all([
+    getFleetDashboard(businessId),
+    getCurrentDispatch(businessId),
+    getFleetIntelligence(businessId),
+    getFleetProductAccess(businessId),
+  ]);
+  return { dashboard, dispatch, intelligence: intelligence as unknown as Record<string, unknown>, entitlement: entitlement as unknown as Record<string, unknown> };
+}
+
 export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [dashboard, setDashboard] = useState<Record<string, unknown> | null>(null);
   const [dispatch, setDispatch] = useState<Record<string, unknown> | null>(null);
@@ -27,34 +41,33 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const hydrate = useCallback(async () => {
+  const hydrate = useCallback(async (preferredBusinessId?: string) => {
     setError(null);
     const supabase = getSupabaseClient();
     const { data: auth, error: authError } = await supabase.auth.getSession();
-    if (authError) throw authError;
+    if (authError) throw new Error(authError.message);
     if (!auth.session) throw new Error('Sign in to Kleenest Fleet to continue.');
-    // Supabase only returns demo workspaces for verified platform-owner sessions.
-    // Regular Fleet users continue to receive only their own Business memberships.
     const { data: rows, error: workspaceError } = await supabase.rpc('business_list_workspaces', { p_include_demo: true });
-    if (workspaceError) throw workspaceError;
+    if (workspaceError) throw new Error(workspaceError.message);
     const candidates = (Array.isArray(rows) ? rows : []) as Workspace[];
-    let selected: Workspace | null = null;
-    for (const candidate of candidates) {
-      if (candidate.business_id && await getFleetAccess(candidate.business_id)) { selected = candidate; break; }
+    const accessChecks = await Promise.all(candidates.map(async candidate => {
+      try { return { candidate, allowed: Boolean(candidate.business_id) && await getFleetAccess(candidate.business_id) }; }
+      catch { return { candidate, allowed: false }; }
+    }));
+    const eligible = accessChecks.filter(item => item.allowed).map(item => item.candidate);
+    if (!eligible.length) {
+      setWorkspaces([]);
+      setWorkspace(null);
+      throw new Error('No Fleet-enabled Business workspace is available for this account.');
     }
-    if (!selected) throw new Error('No Fleet-enabled Business workspace is available for this account.');
-    const businessId = selected.business_id;
-    const [nextDashboard, nextDispatch, nextIntelligence, nextEntitlement] = await Promise.all([
-      getFleetDashboard(businessId),
-      getCurrentDispatch(businessId),
-      getFleetIntelligence(businessId),
-      getFleetProductAccess(businessId),
-    ]);
+    const selected = eligible.find(candidate => candidate.business_id === preferredBusinessId) ?? eligible[0];
+    const detail = await loadWorkspaceData(selected);
+    setWorkspaces(eligible);
     setWorkspace(selected);
-    setDashboard(nextDashboard);
-    setDispatch(nextDispatch);
-    setIntelligence(nextIntelligence as unknown as Record<string, unknown>);
-    setEntitlement(nextEntitlement as unknown as Record<string, unknown>);
+    setDashboard(detail.dashboard);
+    setDispatch(detail.dispatch);
+    setIntelligence(detail.intelligence);
+    setEntitlement(detail.entitlement);
   }, []);
 
   useEffect(() => {
@@ -64,10 +77,19 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
-    try { await hydrate(); } finally { setRefreshing(false); }
+    try { await hydrate(workspace?.business_id); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    finally { setRefreshing(false); }
+  }, [hydrate, workspace?.business_id]);
+
+  const selectWorkspace = useCallback(async (businessId: string) => {
+    setRefreshing(true);
+    try { await hydrate(businessId); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    finally { setRefreshing(false); }
   }, [hydrate]);
 
-  const value = useMemo(() => ({ workspace, dashboard, dispatch, intelligence, entitlement, loading, refreshing, error, refresh }), [workspace, dashboard, dispatch, intelligence, entitlement, loading, refreshing, error, refresh]);
+  const value = useMemo(() => ({ workspace, workspaces, dashboard, dispatch, intelligence, entitlement, loading, refreshing, error, refresh, selectWorkspace }), [workspace, workspaces, dashboard, dispatch, intelligence, entitlement, loading, refreshing, error, refresh, selectWorkspace]);
   return <FleetWorkspaceContext.Provider value={value}>{children}</FleetWorkspaceContext.Provider>;
 }
 
