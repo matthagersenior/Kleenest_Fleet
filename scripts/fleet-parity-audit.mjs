@@ -1,10 +1,15 @@
 import fs from 'node:fs';
 const read=(p)=>fs.readFileSync(new URL(`../${p}`,import.meta.url),'utf8');
-const requiredFiles=['app/index.tsx','app/auth.tsx','app/operations.tsx','app/execution.tsx','app/signals.tsx','app/metrics.tsx','app/sync.tsx','app/intelligence.tsx','app/premium.tsx','app/enterprise.tsx','src/services/fleet.ts','src/services/signals.ts','src/services/enterprise.ts'];
+const requiredFiles=['app/index.tsx','app/auth.tsx','app/dispatch.tsx','app/operations.tsx','app/execution.tsx','app/signals.tsx','app/metrics.tsx','app/sync.tsx','app/intelligence.tsx','app/premium.tsx','app/enterprise.tsx','src/components/FleetMap.tsx','src/services/fleet.ts','src/services/locations.ts','src/services/geofence.ts','src/services/signals.ts','src/services/enterprise.ts'];
 for(const f of requiredFiles){if(!fs.existsSync(new URL(`../${f}`,import.meta.url)))throw new Error(`Fleet parity: missing ${f}`)}
 const fleet=read('src/services/fleet.ts');
 const enterprise=read('src/services/enterprise.ts');
 const signals=read('src/services/signals.ts');
+const locations=read('src/services/locations.ts');
+const geofence=read('src/services/geofence.ts');
+const dispatch=read('app/dispatch.tsx');
+const execution=read('app/execution.tsx');
+const map=read('src/components/FleetMap.tsx');
 const checks={
 'access authority':['has_fleet_access','get_business_product_access','get_business_service_entitlement'],
 'operations CRUD':['fleet_create_vehicle','fleet_set_vehicle_status','fleet_create_driver','fleet_set_driver_status','fleet_create_route','fleet_set_route_stops','fleet_dispatch_route'],
@@ -16,6 +21,11 @@ const checks={
 'intelligence':['fleet_operations_exception_intelligence','fleet_restroom_preventive_schedule','fleet_restroom_remediation_risk','fleet_restroom_prevention_portfolio','fleet_restroom_prevention_effectiveness'],
 'policy configuration':['fleet_update_dispatch_signal_policy','fleet_update_exception_policy']};
 for(const [family,names] of Object.entries(checks))for(const name of names)if(!fleet.includes(name))throw new Error(`Fleet parity: ${family} missing ${name}`);
+for(const token of ['map_network_nearby_v2','location_id','business_logo_url'])if(!locations.includes(token))throw new Error(`Fleet parity: canonical map location service missing ${token}`);
+for(const token of ['fleet_route_geofence_manifest','record_geofence_event','distanceMeters'])if(!geofence.includes(token))throw new Error(`Fleet parity: geofence service missing ${token}`);
+for(const token of ['FleetMap','setRouteStops','Save route stop order','Add to route','MAP ROUTING + DISPATCH'])if(!dispatch.includes(token))throw new Error(`Fleet parity: map dispatch planner missing ${token}`);
+for(const token of ['@maplibre/maplibre-react-native','Marker','business_logo_url','routeStopIds'])if(!map.includes(token))throw new Error(`Fleet parity: Fleet map missing ${token}`);
+for(const token of ['watchPositionAsync','recordFleetGeofenceEvent','LIVE GEOFENCE TRACKING','recordRouteStopTiming'])if(!execution.includes(token))throw new Error(`Fleet parity: live execution missing ${token}`);
 if(!enterprise.match(/enterprise/i))throw new Error('Fleet parity: Enterprise service is not wired');
 if(!signals.match(/signal|occupancy|location/i))throw new Error('Fleet parity: signal service lacks live operational signals');
 const operations=read('app/operations.tsx');
@@ -28,4 +38,6 @@ if(!authCompact.includes("provider:'google'")&&!authCompact.includes('provider:"
 if(!authCompact.includes('skipBrowserRedirect:true'))throw new Error('Fleet parity: Google auth must use native browser handoff');
 const pkg=JSON.parse(read('package.json'));
 for(const [name,version] of Object.entries({'expo':'~57.0.17','react':'19.2.3','react-native':'0.86.3','react-native-reanimated':'4.5.1','react-native-worklets':'0.10.1'}))if(pkg.dependencies?.[name]!==version)throw new Error(`Fleet parity: ${name} must match Expo 57 runtime ${version}`);
-console.log('Fleet parity audit passed: access, CRUD, preventive dispatch, execution, maintenance, Premium, metrics, intelligence, policies, signals, Enterprise, Google OAuth and Expo-compatible native runtime are present.');
+if(pkg.dependencies?.['@maplibre/maplibre-react-native']!=='^11.3.6')throw new Error('Fleet parity: MapLibre native runtime must match Consumer');
+if(pkg.dependencies?.['expo-location']!=='~57.0.14')throw new Error('Fleet parity: expo-location must match Expo 57 Consumer runtime');
+console.log('Fleet parity audit passed: map routing, canonical locations, geofence mission execution, notifications/progression backend contracts, access, CRUD, preventive dispatch, maintenance, Premium, metrics, intelligence, policies, signals, Enterprise, Google OAuth and Expo-compatible native runtime are present.');
