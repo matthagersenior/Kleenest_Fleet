@@ -1,0 +1,39 @@
+name: Publish Fleet OTA Update
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'src/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fleet-production-ota
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_SUPABASE_URL: https://ssgesjzdvdsqacdtasje.supabase.co
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_f1rbczgvWKSQy2g9mTDQZg_K9Wv19bL
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Ensure Fleet OTA channel exists
+        run: |
+          npx eas-cli@latest channel:create fleet-production --branch fleet-production --non-interactive || \
+          npx eas-cli@latest channel:edit fleet-production --branch fleet-production --non-interactive
+      - name: Publish Fleet OTA update
+        run: npx eas-cli@latest update --channel fleet-production --message "Fleet ${GITHUB_SHA}" --non-interactive
