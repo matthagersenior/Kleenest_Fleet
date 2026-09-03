@@ -1,4 +1,4 @@
-name: Android APK
+name: Android Standalone APK
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: fleet-android-apk
+  group: fleet-standalone-apk
   cancel-in-progress: true
 
 jobs:
@@ -16,6 +16,7 @@ jobs:
     env:
       EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || 'https://ssgesjzdvdsqacdtasje.supabase.co' }}
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_f1rbczgvWKSQy2g9mTDQZg_K9Wv19bL' }}
+      NODE_ENV: production
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,21 +25,23 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm run audit
       - run: npm run typecheck
-      - name: Generate Android project
+      - name: Generate clean Android project
         run: npx expo prebuild --platform android --clean --non-interactive
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
           cache: gradle
-      - name: Build installable release APK
+      - name: Build standalone release APK with embedded JS bundle
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon
-      - name: Stage APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk Kleenest-Fleet.apk
+      - name: Stage standalone APK
+        run: |
+          test -f android/app/build/outputs/apk/release/app-release.apk
+          cp android/app/build/outputs/apk/release/app-release.apk Kleenest-Fleet-Standalone.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: Kleenest-Fleet-APK
-          path: Kleenest-Fleet.apk
+          name: Kleenest-Fleet-Standalone-APK
+          path: Kleenest-Fleet-Standalone.apk
           if-no-files-found: error
           retention-days: 30
