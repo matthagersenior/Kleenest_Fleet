@@ -5,6 +5,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: fleet-standalone-apk
   cancel-in-progress: true
@@ -12,10 +15,11 @@ concurrency:
 jobs:
   apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 65
     env:
       EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || 'https://ssgesjzdvdsqacdtasje.supabase.co' }}
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_f1rbczgvWKSQy2g9mTDQZg_K9Wv19bL' }}
+      KLEENEST_STANDALONE_ANDROID: '1'
       NODE_ENV: production
       CI: 1
     steps:
@@ -23,53 +27,47 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: npm install --no-audit --no-fund
-      - run: npm run audit
-      - run: npm run typecheck
-      - name: Remove unused animation runtimes from standalone graph
-        run: |
-          rm -rf node_modules/react-native-reanimated node_modules/react-native-worklets
-          test ! -d node_modules/react-native-reanimated
-          test ! -d node_modules/react-native-worklets
-      - name: Generate clean Android project
-        run: npx expo prebuild --platform android --clean --non-interactive
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-          cache: gradle
-      - name: Verify standalone native dependency graph
+      - run: npm install --no-audit --no-fund
+      - run: npm run audit
+      - run: npm run typecheck
+      - name: Generate clean Android native project
+        run: npx expo prebuild --platform android --clean
+      - name: Verify standalone release dependency graph
         working-directory: android
         run: |
           ./gradlew :app:dependencies --configuration releaseRuntimeClasspath --no-daemon > /tmp/fleet-release-deps.txt
-          if grep -Eqi 'react-native-reanimated|react-native-worklets' /tmp/fleet-release-deps.txt; then
-            echo 'Unused animation runtime leaked into Fleet release dependencies.' >&2
-            grep -Ei 'react-native-reanimated|react-native-worklets' /tmp/fleet-release-deps.txt >&2 || true
+          grep -Eqi 'react-native-reanimated' /tmp/fleet-release-deps.txt
+          grep -Eqi 'react-native-worklets' /tmp/fleet-release-deps.txt
+          if grep -Eqi 'expo-dev-client|expo-dev-launcher|expo-dev-menu' /tmp/fleet-release-deps.txt; then
+            echo 'Expo development runtime leaked into Fleet release dependencies.' >&2
             exit 1
           fi
       - name: Build standalone release APK with embedded JS bundle
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon
-      - name: Verify physical-device native payload
+      - name: Verify release artifact and ARM64 runtime payload
         run: |
           test -f android/app/build/outputs/apk/release/app-release.apk
           unzip -p android/app/build/outputs/apk/release/app-release.apk assets/index.android.bundle > /tmp/fleet.bundle
           test -s /tmp/fleet.bundle
           grep -a -q 'ssgesjzdvdsqacdtasje.supabase.co' /tmp/fleet.bundle
+          ! grep -a -q 'Development Build' /tmp/fleet.bundle
           unzip -l android/app/build/outputs/apk/release/app-release.apk | grep -q 'lib/arm64-v8a/libreactnative.so'
           unzip -l android/app/build/outputs/apk/release/app-release.apk | grep -q 'lib/arm64-v8a/libhermesvm.so'
           unzip -l android/app/build/outputs/apk/release/app-release.apk | grep -q 'lib/arm64-v8a/libappmodules.so'
-          if unzip -l android/app/build/outputs/apk/release/app-release.apk | grep -Eq 'lib/[^/]+/lib(reanimated|worklets)\.so'; then
-            echo 'Fleet APK still contains unused Reanimated/Worklets native libraries.' >&2
-            exit 1
-          fi
+          unzip -l android/app/build/outputs/apk/release/app-release.apk | grep -q 'lib/arm64-v8a/libreanimated.so'
+          unzip -l android/app/build/outputs/apk/release/app-release.apk | grep -q 'lib/arm64-v8a/libworklets.so'
       - name: Enable KVM for Android emulator
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
           sudo chmod 666 /dev/kvm
-      - name: Android 16 x86_64 release startup test
+      - name: Android 16 Fleet startup test
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 36
@@ -84,7 +82,7 @@ jobs:
             adb shell am force-stop com.kleenest.fleet
             adb shell monkey -p com.kleenest.fleet -c android.intent.category.LAUNCHER 1
             sleep 30
-            test -n "$(adb shell pidof com.kleenest.fleet | tr -d '\r' || true)" || (echo 'Fleet APK exited during x86_64 startup.' >&2; adb logcat -d -v threadtime | tail -n 1200 >&2; exit 1)
+            test -n "$(adb shell pidof com.kleenest.fleet | tr -d '\r' || true)" || (echo 'Fleet APK exited during startup.' >&2; adb logcat -d -v threadtime | tail -n 1200 >&2; exit 1)
             adb shell dumpsys activity activities | grep -F com.kleenest.fleet >/dev/null
             ! adb logcat -d -v threadtime | grep -E 'Process: com\.kleenest\.fleet|FATAL EXCEPTION.*com\.kleenest\.fleet|UnsatisfiedLinkError.*com\.kleenest\.fleet'
       - name: Stage standalone APK
