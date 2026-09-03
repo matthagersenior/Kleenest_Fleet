@@ -33,7 +33,9 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
     const { data: auth, error: authError } = await supabase.auth.getSession();
     if (authError) throw authError;
     if (!auth.session) throw new Error('Sign in to Kleenest Fleet to continue.');
-    const { data: rows, error: workspaceError } = await supabase.rpc('business_list_workspaces', { p_include_demo: false });
+    // Supabase only returns demo workspaces for verified platform-owner sessions.
+    // Regular Fleet users continue to receive only their own Business memberships.
+    const { data: rows, error: workspaceError } = await supabase.rpc('business_list_workspaces', { p_include_demo: true });
     if (workspaceError) throw workspaceError;
     const candidates = (Array.isArray(rows) ? rows : []) as Workspace[];
     let selected: Workspace | null = null;
