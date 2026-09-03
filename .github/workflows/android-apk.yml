@@ -51,22 +51,14 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
           script: |
-            set -eu
-            APK=android/app/build/outputs/apk/release/app-release.apk
-            PACKAGE=com.kleenest.fleet
             adb wait-for-device
-            adb install -r "$APK"
+            adb install -r android/app/build/outputs/apk/release/app-release.apk
             adb logcat -c
-            adb shell am force-stop "$PACKAGE"
-            adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1
+            adb shell am force-stop com.kleenest.fleet
+            adb shell monkey -p com.kleenest.fleet -c android.intent.category.LAUNCHER 1
             sleep 12
-            PID="$(adb shell pidof "$PACKAGE" | tr -d '\r' || true)"
-            if [ -z "$PID" ]; then
-              echo 'Fleet APK exited during startup.' >&2
-              adb logcat -d -v threadtime | tail -n 500 >&2
-              exit 1
-            fi
-            adb shell dumpsys activity activities | grep -F "$PACKAGE" >/dev/null
+            test -n "$(adb shell pidof com.kleenest.fleet | tr -d '\r' || true)" || (echo 'Fleet APK exited during startup.' >&2; adb logcat -d -v threadtime | tail -n 500 >&2; exit 1)
+            adb shell dumpsys activity activities | grep -F com.kleenest.fleet >/dev/null
       - name: Stage standalone APK
         run: |
           test -f android/app/build/outputs/apk/release/app-release.apk
