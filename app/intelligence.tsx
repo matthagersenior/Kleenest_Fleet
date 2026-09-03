@@ -9,6 +9,8 @@ export default function FleetIntelligenceScreen() {
     <Section title="Operational exceptions" value={source.operations} />
     <Section title="Preventive schedule & signoff" value={source.prevention} />
     <Section title="Remediation risk" value={source.remediationRisk} />
+    <Section title="Prevention portfolio" value={source.preventionPortfolio} />
+    <Section title="Prevention effectiveness" value={source.preventionEffectiveness} />
     <Section title="Metric capabilities" value={source.metricCapabilities} />
     <Section title="Metric configuration" value={source.metricConfiguration} />
     <Section title="Metric values" value={source.metricValues} />
