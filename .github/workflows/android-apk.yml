@@ -44,15 +44,20 @@ jobs:
           profile: pixel_6
           disable-animations: true
           script: |
-            adb install -r android/app/build/outputs/apk/release/app-release.apk
+            set -euo pipefail
+            APK=android/app/build/outputs/apk/release/app-release.apk
+            PACKAGE=com.kleenest.fleet
+            adb install -r "$APK"
             adb logcat -c
-            adb shell monkey -p com.kleenest.fleet -c android.intent.category.LAUNCHER 1
+            adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1
             sleep 12
-            if ! adb shell pidof com.kleenest.fleet >/dev/null; then
+            PID="$(adb shell pidof "$PACKAGE" | tr -d '\r' || true)"
+            if [ -z "$PID" ]; then
               echo 'Fleet APK exited during startup.' >&2
               adb logcat -d -v brief | tail -n 500 >&2
               exit 1
             fi
+            adb shell dumpsys activity activities | grep -F "$PACKAGE" >/dev/null
       - name: Stage standalone APK
         run: |
           test -f android/app/build/outputs/apk/release/app-release.apk
