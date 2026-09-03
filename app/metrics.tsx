@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { StructuredData } from '@/components/StructuredData';
 import { createFleetMetricDefinition, updateFleetMetricDefinition } from '@/services/fleet';
 import { useFleetWorkspace } from '@/state/FleetWorkspace';
 
@@ -34,7 +35,7 @@ export default function FleetMetricsScreen() {
       <Action label="Add restroom coverage target" busy={busy === 'coverage'} onPress={() => run('coverage', () => createFleetMetricDefinition(businessId, { metricKey: `restroom_coverage_${Date.now()}`, featureCode: 'fleet.metric.restroom_coverage', name: 'Restroom coverage target', description: 'Controller-defined target using the canonical Fleet restroom coverage score.', unit: 'score', sourceDataset: 'fleet_metric_snapshots', sourceMetric: 'restroom_coverage_score', aggregation: 'avg', direction: 'higher_is_better', scoringMethod: 'linear', goal: 90, threshold: 70, maxScore: 100, period: 'daily' }))} />
     </View>
     <View style={{ gap: 9 }}><Text style={{ fontSize: 20, fontWeight: '800' }}>Configured definitions</Text>{definitions.length === 0 ? <Text style={{ color: '#66766e' }}>No controller-authored definitions returned yet.</Text> : definitions.map((definition: any, index) => { const id = String(definition.id ?? definition.metric_definition_id ?? ''); const active = definition.active !== false; return <View key={id || index} style={{ backgroundColor: 'white', borderRadius: 16, padding: 14, gap: 6 }}><Text style={{ fontSize: 16, fontWeight: '800' }}>{String(definition.name ?? definition.metric_key ?? 'Fleet metric')}</Text><Text style={{ color: '#66766e' }}>{String(definition.source_dataset ?? '')} · {String(definition.source_metric ?? '')}</Text>{id ? <Action label={active ? 'Disable' : 'Enable'} busy={busy === id} onPress={() => run(id, () => updateFleetMetricDefinition(id, { active: !active }))} /> : null}</View>; })}</View>
-    <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 14, gap: 5 }}><Text style={{ fontSize: 17, fontWeight: '800' }}>Capability catalog</Text><Text selectable style={{ color: '#5f6f66' }}>{JSON.stringify(capabilities ?? {}, null, 2)}</Text></View>
+    <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 14, gap: 9 }}><Text style={{ fontSize: 17, fontWeight: '800' }}>Capability catalog</Text><Text style={{ color:'#66766e', lineHeight:19 }}>These are the canonical measurement sources Fleet can use for controller-defined targets.</Text><StructuredData value={sources.length ? sources : capabilities} empty="No Fleet metric capabilities returned." /></View>
   </ScrollView>;
 }
 function Metric({ label, value }: { label: string; value: number }) { return <View style={{ flex: 1, backgroundColor: 'white', borderRadius: 16, padding: 14 }}><Text style={{ color: '#66766e', fontSize: 12, fontWeight: '700' }}>{label}</Text><Text style={{ fontSize: 24, fontWeight: '800' }}>{value}</Text></View>; }
