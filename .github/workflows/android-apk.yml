@@ -12,7 +12,7 @@ concurrency:
 jobs:
   apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 50
     env:
       EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || 'https://ssgesjzdvdsqacdtasje.supabase.co' }}
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_f1rbczgvWKSQy2g9mTDQZg_K9Wv19bL' }}
@@ -28,6 +28,9 @@ jobs:
       - run: npm run typecheck
       - name: Generate clean Android project
         run: npx expo prebuild --platform android --clean --non-interactive
+      - name: Verify unused animation runtimes are not autolinked
+        run: |
+          ! grep -R -E 'react-native-reanimated|react-native-worklets' android/settings.gradle android/app/build.gradle android/gradle.properties 2>/dev/null
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -42,10 +45,10 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
           sudo chmod 666 /dev/kvm
-      - name: Boot-test release APK
+      - name: Android 16 release startup test
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: 36
           arch: x86_64
           profile: pixel_6
           disable-animations: true
@@ -56,9 +59,10 @@ jobs:
             adb logcat -c
             adb shell am force-stop com.kleenest.fleet
             adb shell monkey -p com.kleenest.fleet -c android.intent.category.LAUNCHER 1
-            sleep 12
-            test -n "$(adb shell pidof com.kleenest.fleet | tr -d '\r' || true)" || (echo 'Fleet APK exited during startup.' >&2; adb logcat -d -v threadtime | tail -n 500 >&2; exit 1)
+            sleep 30
+            test -n "$(adb shell pidof com.kleenest.fleet | tr -d '\r' || true)" || (echo 'Fleet APK exited during startup.' >&2; adb logcat -d -v threadtime | tail -n 1000 >&2; exit 1)
             adb shell dumpsys activity activities | grep -F com.kleenest.fleet >/dev/null
+            ! adb logcat -d -v threadtime | grep -E 'Process: com\.kleenest\.fleet|FATAL EXCEPTION.*com\.kleenest\.fleet|UnsatisfiedLinkError.*com\.kleenest\.fleet'
       - name: Stage standalone APK
         run: |
           test -f android/app/build/outputs/apk/release/app-release.apk
