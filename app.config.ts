@@ -21,10 +21,16 @@ const config: ExpoConfig = {
     bundleIdentifier: 'com.kleenest.fleet',
     supportsTablet: true,
     config: { usesNonExemptEncryption: false },
+    infoPlist: {
+      NSLocationWhenInUseUsageDescription: 'Kleenest Fleet uses your location to plan, dispatch and execute routes with geofence-aware stops.',
+    },
   },
-  android: { package: 'com.kleenest.fleet' },
+  android: {
+    package: 'com.kleenest.fleet',
+    permissions: ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION'],
+  },
   web: { output: 'single', bundler: 'metro', name: 'Kleenest Fleet', shortName: 'Kleenest Fleet' },
-  plugins: ['expo-router', 'expo-secure-store'],
+  plugins: ['expo-router', 'expo-location', 'expo-secure-store', '@maplibre/maplibre-react-native'],
   experiments: { typedRoutes: true, baseUrl: '/Kleenest_Fleet' },
   extra: {
     appRole: 'fleet',
