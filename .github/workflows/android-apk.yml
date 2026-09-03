@@ -36,6 +36,12 @@ jobs:
       - name: Build standalone release APK with embedded JS bundle
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon
+      - name: Enable KVM for Android emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+          sudo chmod 666 /dev/kvm
       - name: Boot-test release APK
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -43,18 +49,21 @@ jobs:
           arch: x86_64
           profile: pixel_6
           disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
           script: |
-            set -euo pipefail
+            set -eu
             APK=android/app/build/outputs/apk/release/app-release.apk
             PACKAGE=com.kleenest.fleet
+            adb wait-for-device
             adb install -r "$APK"
             adb logcat -c
+            adb shell am force-stop "$PACKAGE"
             adb shell monkey -p "$PACKAGE" -c android.intent.category.LAUNCHER 1
             sleep 12
             PID="$(adb shell pidof "$PACKAGE" | tr -d '\r' || true)"
             if [ -z "$PID" ]; then
               echo 'Fleet APK exited during startup.' >&2
-              adb logcat -d -v brief | tail -n 500 >&2
+              adb logcat -d -v threadtime | tail -n 500 >&2
               exit 1
             fi
             adb shell dumpsys activity activities | grep -F "$PACKAGE" >/dev/null
