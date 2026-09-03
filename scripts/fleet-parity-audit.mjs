@@ -23,5 +23,5 @@ if(!operations.includes('attachPreventiveWorkToRoute'))throw new Error('Fleet pa
 const auth=read('app/auth.tsx');
 if(!auth.includes('signInWithPassword')||!auth.includes('await refresh()'))throw new Error('Fleet parity: login does not verify Fleet workspace authorization');
 const pkg=JSON.parse(read('package.json'));
-if(!pkg.dependencies?.['react-native-worklets'])throw new Error('Fleet parity: Android worklets dependency missing');
+if(pkg.dependencies?.['react-native-worklets']||pkg.dependencies?.['react-native-reanimated'])throw new Error('Fleet parity: unused native animation runtimes must not be direct dependencies');
 console.log('Fleet parity audit passed: access, CRUD, preventive dispatch, execution, maintenance, Premium, metrics, intelligence, policies, signals and Enterprise surfaces are present.');
