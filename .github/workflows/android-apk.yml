@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  apk:
+  candidate:
     runs-on: ubuntu-latest
     timeout-minutes: 65
     env:
@@ -34,16 +34,22 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm run audit
       - run: npm run typecheck
-      - name: Precompile Android JS and Expo config gate
+      - name: Expo health and production bundle preflight
         run: |
+          npx expo-doctor
           rm -rf .preflight
           npx expo config --type public --json > /tmp/fleet-expo-config.json
           node -e "const c=require('/tmp/fleet-expo-config.json');if(c.android?.package!=='com.kleenest.fleet')process.exit(1);if(c.name!=='Kleenest Fleet')process.exit(1)"
           npx expo export --platform android --output-dir .preflight --clear
-          test -d .preflight
           test -n "$(find .preflight -type f -print -quit)"
       - name: Generate clean Android native project
         run: npx expo prebuild --platform android --clean
+      - name: Pre-package native and manifest diagnostics
+        working-directory: android
+        run: |
+          ./gradlew :app:processReleaseMainManifest :app:compileDebugKotlin --no-daemon
+          find app/build/intermediates -path '*release*AndroidManifest.xml' -print -exec grep -n '<uses-permission' {} \; > /tmp/fleet-manifest-permissions.txt || true
+          cat /tmp/fleet-manifest-permissions.txt
       - name: Verify standalone release dependency graph
         working-directory: android
         run: |
@@ -54,10 +60,10 @@ jobs:
             echo 'Expo development runtime leaked into Fleet release dependencies.' >&2
             exit 1
           fi
-      - name: Build standalone release APK with embedded JS bundle
+      - name: Build internal release candidate
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon
-      - name: Verify release artifact and ARM64 runtime payload
+      - name: Verify release candidate and ARM64 payload
         run: |
           test -f android/app/build/outputs/apk/release/app-release.apk
           unzip -p android/app/build/outputs/apk/release/app-release.apk assets/index.android.bundle > /tmp/fleet.bundle
@@ -69,13 +75,13 @@ jobs:
           unzip -l android/app/build/outputs/apk/release/app-release.apk | grep -q 'lib/arm64-v8a/libappmodules.so'
           unzip -l android/app/build/outputs/apk/release/app-release.apk | grep -q 'lib/arm64-v8a/libreanimated.so'
           unzip -l android/app/build/outputs/apk/release/app-release.apk | grep -q 'lib/arm64-v8a/libworklets.so'
-      - name: Enable KVM for Android emulator
+      - name: Enable KVM for x86 Android emulator
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
           sudo chmod 666 /dev/kvm
-      - name: Android 16 Fleet startup test
+      - name: Android 16 x86_64 startup diagnostic gate
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 36
@@ -83,17 +89,61 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
-          script: bash scripts/android-startup-smoke.sh android/app/build/outputs/apk/release/app-release.apk com.kleenest.fleet Fleet
-      - name: Upload Fleet startup diagnostics
+          script: bash scripts/android-startup-smoke.sh android/app/build/outputs/apk/release/app-release.apk com.kleenest.fleet Fleet-x86_64
+      - name: Upload x86 startup diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Kleenest-Fleet-Startup-Diagnostics
+          name: Kleenest-Fleet-x86-Startup-Diagnostics
           path: android-startup-logs
           if-no-files-found: ignore
           retention-days: 7
-      - name: Stage standalone APK
-        run: cp android/app/build/outputs/apk/release/app-release.apk Kleenest-Fleet-Standalone.apk
+      - name: Stage internal candidate
+        run: cp android/app/build/outputs/apk/release/app-release.apk Kleenest-Fleet-Candidate.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kleenest-Fleet-Internal-Candidate
+          path: Kleenest-Fleet-Candidate.apk
+          if-no-files-found: error
+          retention-days: 1
+
+  arm64-runtime:
+    needs: candidate
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: Kleenest-Fleet-Internal-Candidate
+          path: candidate
+      - name: Android 16 ARM64 startup diagnostic gate
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          arch: arm64-v8a
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
+          script: bash scripts/android-startup-smoke.sh candidate/Kleenest-Fleet-Candidate.apk com.kleenest.fleet Fleet-ARM64
+      - name: Upload ARM64 startup diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kleenest-Fleet-ARM64-Startup-Diagnostics
+          path: android-startup-logs
+          if-no-files-found: ignore
+          retention-days: 7
+
+  promote:
+    needs: arm64-runtime
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Kleenest-Fleet-Internal-Candidate
+          path: candidate
+      - run: cp candidate/Kleenest-Fleet-Candidate.apk Kleenest-Fleet-Standalone.apk
       - uses: actions/upload-artifact@v4
         with:
           name: Kleenest-Fleet-Standalone-APK
