@@ -34,6 +34,14 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm run audit
       - run: npm run typecheck
+      - name: Precompile Android JS and Expo config gate
+        run: |
+          rm -rf .preflight
+          npx expo config --type public --json > /tmp/fleet-expo-config.json
+          node -e "const c=require('/tmp/fleet-expo-config.json');if(c.android?.package!=='com.kleenest.fleet')process.exit(1);if(c.name!=='Kleenest Fleet')process.exit(1)"
+          npx expo export --platform android --output-dir .preflight --clear
+          test -d .preflight
+          test -n "$(find .preflight -type f -print -quit)"
       - name: Generate clean Android native project
         run: npx expo prebuild --platform android --clean
       - name: Verify standalone release dependency graph
