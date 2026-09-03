@@ -15,7 +15,7 @@ const config: ExpoConfig = {
   android: { package: 'com.kleenest.fleet' },
   web: { output: 'single', bundler: 'metro', name: 'Kleenest Fleet', shortName: 'Kleenest Fleet' },
   plugins: ['expo-router', 'expo-secure-store'],
-  experiments: { typedRoutes: true },
+  experiments: { typedRoutes: true, baseUrl: '/Kleenest_Fleet' },
   extra: { appRole: 'fleet', supabaseProjectRef: 'ssgesjzdvdsqacdtasje' },
 };
 
