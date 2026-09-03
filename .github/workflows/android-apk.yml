@@ -83,16 +83,15 @@ jobs:
           profile: pixel_6
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -no-metrics
-          script: |
-            adb wait-for-device
-            adb install -r android/app/build/outputs/apk/release/app-release.apk
-            adb logcat -c
-            adb shell am force-stop com.kleenest.fleet
-            adb shell monkey -p com.kleenest.fleet -c android.intent.category.LAUNCHER 1
-            sleep 30
-            test -n "$(adb shell pidof com.kleenest.fleet | tr -d '\r' || true)" || (echo 'Fleet APK exited during startup.' >&2; adb logcat -d -v threadtime | tail -n 1200 >&2; exit 1)
-            adb shell dumpsys activity activities | grep -F com.kleenest.fleet >/dev/null
-            ! adb logcat -d -v threadtime | grep -E 'Process: com\.kleenest\.fleet|FATAL EXCEPTION.*com\.kleenest\.fleet|UnsatisfiedLinkError.*com\.kleenest\.fleet'
+          script: bash scripts/android-startup-smoke.sh android/app/build/outputs/apk/release/app-release.apk com.kleenest.fleet Fleet
+      - name: Upload Fleet startup diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Kleenest-Fleet-Startup-Diagnostics
+          path: android-startup-logs
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Stage standalone APK
         run: cp android/app/build/outputs/apk/release/app-release.apk Kleenest-Fleet-Standalone.apk
       - uses: actions/upload-artifact@v4
