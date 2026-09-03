@@ -31,7 +31,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - run: npm install --no-audit --no-fund
+      - name: Install and deduplicate dependencies
+        run: |
+          npm install --no-audit --no-fund
+          npm dedupe
       - run: npm run audit
       - run: npm run typecheck
       - name: Expo health and production bundle preflight
