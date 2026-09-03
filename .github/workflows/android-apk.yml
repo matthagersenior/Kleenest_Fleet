@@ -12,11 +12,12 @@ concurrency:
 jobs:
   apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     env:
       EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || 'https://ssgesjzdvdsqacdtasje.supabase.co' }}
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_f1rbczgvWKSQy2g9mTDQZg_K9Wv19bL' }}
       NODE_ENV: production
+      CI: 1
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -35,6 +36,23 @@ jobs:
       - name: Build standalone release APK with embedded JS bundle
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon
+      - name: Boot-test release APK
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            adb install -r android/app/build/outputs/apk/release/app-release.apk
+            adb logcat -c
+            adb shell monkey -p com.kleenest.fleet -c android.intent.category.LAUNCHER 1
+            sleep 12
+            if ! adb shell pidof com.kleenest.fleet >/dev/null; then
+              echo 'Fleet APK exited during startup.' >&2
+              adb logcat -d -v brief | tail -n 500 >&2
+              exit 1
+            fi
       - name: Stage standalone APK
         run: |
           test -f android/app/build/outputs/apk/release/app-release.apk
