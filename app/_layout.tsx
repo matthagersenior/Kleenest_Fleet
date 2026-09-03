@@ -8,6 +8,7 @@ export default function RootLayout() {
       <StatusBar style="auto" />
       <Stack screenOptions={{ headerLargeTitle: true, headerShadowVisible: false, contentStyle: { backgroundColor: '#f5f7f6' } }}>
         <Stack.Screen name="index" options={{ title: 'Fleet Control Center' }} />
+        <Stack.Screen name="auth" options={{ title: 'Fleet Sign In', presentation: 'modal' }} />
         <Stack.Screen name="operations" options={{ title: 'Fleet Operations' }} />
         <Stack.Screen name="execution" options={{ title: 'Route Execution' }} />
         <Stack.Screen name="signals" options={{ title: 'Fleet Signals' }} />

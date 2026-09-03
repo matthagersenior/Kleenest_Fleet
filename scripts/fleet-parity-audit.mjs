@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 const read=(p)=>fs.readFileSync(new URL(`../${p}`,import.meta.url),'utf8');
-const requiredFiles=['app/index.tsx','app/operations.tsx','app/execution.tsx','app/signals.tsx','app/metrics.tsx','app/sync.tsx','app/intelligence.tsx','app/premium.tsx','app/enterprise.tsx','src/services/fleet.ts','src/services/signals.ts','src/services/enterprise.ts'];
+const requiredFiles=['app/index.tsx','app/auth.tsx','app/operations.tsx','app/execution.tsx','app/signals.tsx','app/metrics.tsx','app/sync.tsx','app/intelligence.tsx','app/premium.tsx','app/enterprise.tsx','src/services/fleet.ts','src/services/signals.ts','src/services/enterprise.ts'];
 for(const f of requiredFiles){if(!fs.existsSync(new URL(`../${f}`,import.meta.url)))throw new Error(`Fleet parity: missing ${f}`)}
 const fleet=read('src/services/fleet.ts');
 const enterprise=read('src/services/enterprise.ts');
@@ -20,6 +20,8 @@ if(!enterprise.match(/enterprise/i))throw new Error('Fleet parity: Enterprise se
 if(!signals.match(/signal|occupancy|location/i))throw new Error('Fleet parity: signal service lacks live operational signals');
 const operations=read('app/operations.tsx');
 if(!operations.includes('attachPreventiveWorkToRoute'))throw new Error('Fleet parity: preventive work cannot be attached from Fleet operations');
+const auth=read('app/auth.tsx');
+if(!auth.includes('signInWithPassword')||!auth.includes('await refresh()'))throw new Error('Fleet parity: login does not verify Fleet workspace authorization');
 const pkg=JSON.parse(read('package.json'));
 if(!pkg.dependencies?.['react-native-worklets'])throw new Error('Fleet parity: Android worklets dependency missing');
 console.log('Fleet parity audit passed: access, CRUD, preventive dispatch, execution, maintenance, Premium, metrics, intelligence, policies, signals and Enterprise surfaces are present.');
