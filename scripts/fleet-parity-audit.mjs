@@ -21,7 +21,11 @@ if(!signals.match(/signal|occupancy|location/i))throw new Error('Fleet parity: s
 const operations=read('app/operations.tsx');
 if(!operations.includes('attachPreventiveWorkToRoute'))throw new Error('Fleet parity: preventive work cannot be attached from Fleet operations');
 const auth=read('app/auth.tsx');
+const authCompact=auth.replace(/\s+/g,'');
 if(!auth.includes('signInWithPassword')||!auth.includes('await refresh()'))throw new Error('Fleet parity: login does not verify Fleet workspace authorization');
+for(const token of ['Continue with Google','signInWithOAuth','exchangeCodeForSession','Linking.createURL','Linking.openURL'])if(!auth.includes(token))throw new Error(`Fleet parity: Google auth missing ${token}`);
+if(!authCompact.includes("provider:'google'")&&!authCompact.includes('provider:"google"'))throw new Error('Fleet parity: Google auth must use the Supabase google provider');
+if(!authCompact.includes('skipBrowserRedirect:true'))throw new Error('Fleet parity: Google auth must use native browser handoff');
 const pkg=JSON.parse(read('package.json'));
 for(const [name,version] of Object.entries({'expo':'~57.0.17','react':'19.2.3','react-native':'0.86.3','react-native-reanimated':'4.5.1','react-native-worklets':'0.10.1'}))if(pkg.dependencies?.[name]!==version)throw new Error(`Fleet parity: ${name} must match Expo 57 runtime ${version}`);
-console.log('Fleet parity audit passed: access, CRUD, preventive dispatch, execution, maintenance, Premium, metrics, intelligence, policies, signals, Enterprise and Expo-compatible native runtime are present.');
+console.log('Fleet parity audit passed: access, CRUD, preventive dispatch, execution, maintenance, Premium, metrics, intelligence, policies, signals, Enterprise, Google OAuth and Expo-compatible native runtime are present.');
