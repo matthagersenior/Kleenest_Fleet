@@ -23,5 +23,5 @@ if(!operations.includes('attachPreventiveWorkToRoute'))throw new Error('Fleet pa
 const auth=read('app/auth.tsx');
 if(!auth.includes('signInWithPassword')||!auth.includes('await refresh()'))throw new Error('Fleet parity: login does not verify Fleet workspace authorization');
 const pkg=JSON.parse(read('package.json'));
-if(pkg.dependencies?.['react-native-worklets']||pkg.dependencies?.['react-native-reanimated'])throw new Error('Fleet parity: unused native animation runtimes must not be direct dependencies');
-console.log('Fleet parity audit passed: access, CRUD, preventive dispatch, execution, maintenance, Premium, metrics, intelligence, policies, signals and Enterprise surfaces are present.');
+for(const [name,version] of Object.entries({'expo':'~57.0.17','react':'19.2.3','react-native':'0.86.3','react-native-reanimated':'4.5.1','react-native-worklets':'0.10.2'}))if(pkg.dependencies?.[name]!==version)throw new Error(`Fleet parity: ${name} must match Consumer runtime ${version}`);
+console.log('Fleet parity audit passed: access, CRUD, preventive dispatch, execution, maintenance, Premium, metrics, intelligence, policies, signals, Enterprise and Consumer-compatible native runtime are present.');
