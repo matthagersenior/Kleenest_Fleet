@@ -30,8 +30,9 @@ for(const token of ['map_network_nearby_v2','location_id','business_logo_url'])i
 for(const token of ['fleet_route_geofence_manifest','record_geofence_event','distanceMeters'])if(!geofence.includes(token))throw new Error(`Fleet parity: geofence service missing ${token}`);
 for(const token of ['FleetMap','setRouteStops','Save route stop order','Add to route','MAP ROUTING + DISPATCH','Search radius','National','Assign vehicle','Assign driver','onInteractionChange'])if(!dispatch.includes(token))throw new Error(`Fleet parity: map dispatch planner missing ${token}`);
 for(const token of ['@maplibre/maplibre-react-native','Marker','business_logo_url','routeStopIds','Drag to pan','onInteractionChange','Zoom Fleet map in','Recenter Fleet map'])if(!map.includes(token))throw new Error(`Fleet parity: Fleet map missing ${token}`);
-if(!signals.includes("order('occurred_at'"))throw new Error('Fleet parity: operational events must sort by fleet_operational_events.occurred_at');
-if(signals.includes("order('created_at'"))throw new Error('Fleet parity: stale fleet_operational_events.created_at query remains');
+const operationalEventQuery=signals.match(/export async function listFleetOperationalEvents[^\n]*/)?.[0]??'';
+if(!operationalEventQuery.includes("from('fleet_operational_events')")||!operationalEventQuery.includes("order('occurred_at'"))throw new Error('Fleet parity: fleet_operational_events must sort by occurred_at');
+if(operationalEventQuery.includes("order('created_at'"))throw new Error('Fleet parity: stale fleet_operational_events.created_at query remains');
 if(!sync.includes('e.occurred_at'))throw new Error('Fleet parity: Notifications + Offline must render occurred_at');
 for(const token of ['watchPositionAsync','recordFleetGeofenceEvent','LIVE GEOFENCE TRACKING','recordRouteStopTiming'])if(!execution.includes(token))throw new Error(`Fleet parity: live execution missing ${token}`);
 for(const token of ['getEnterpriseOperationalPortfolio','createEnterpriseNetwork','inviteEnterprisePartner','createPartnerAllocation','getPartnerNetworkBenchmark','getPartnerAllocationRoi'])if(!enterprise.includes(token))throw new Error(`Fleet parity: Enterprise service missing ${token}`);
