@@ -7,6 +7,9 @@ on:
     paths:
       - 'app/**'
       - 'src/**'
+      - 'scripts/**'
+      - 'app.config.ts'
+      - '.github/workflows/ota-update.yml'
 
 permissions:
   contents: read
@@ -29,11 +32,19 @@ jobs:
         with:
           node-version: 22
           cache: npm
+      - name: Verify Fleet OTA credential
+        run: test -n "$EXPO_TOKEN" || (echo "EXPO_TOKEN is not configured in Kleenest_Fleet" && exit 1)
       - name: Install dependencies
         run: npm install --no-audit --no-fund
-      - name: Ensure Fleet OTA channel exists
+      - name: Verify Expo authentication
+        run: npx eas-cli@latest whoami --non-interactive
+      - name: Verify current Fleet dispatch source
         run: |
-          npx eas-cli@latest channel:create fleet-production --branch fleet-production --non-interactive || \
-          npx eas-cli@latest channel:edit fleet-production --branch fleet-production --non-interactive
+          grep -q 'Search radius' app/dispatch.tsx
+          grep -q 'National' app/dispatch.tsx
+          grep -q 'Assign vehicle' app/dispatch.tsx
+          grep -q 'onInteractionChange' src/components/FleetMap.tsx
+          grep -q "order('occurred_at'" src/services/signals.ts
+          grep -q 'e.occurred_at' app/sync.tsx
       - name: Publish Fleet OTA update
         run: npx eas-cli@latest update --channel fleet-production --message "Fleet ${GITHUB_SHA}" --non-interactive
