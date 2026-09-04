@@ -7,6 +7,7 @@ const config: ExpoConfig = {
   slug: 'kleenest-consumer',
   version: '0.1.0',
   runtimeVersion: 'kleenest-fleet-0.1.0',
+  icon: './assets/app-icon.png',
   updates: {
     enabled: true,
     url: `https://u.expo.dev/${EAS_PROJECT_ID}`,
@@ -27,6 +28,7 @@ const config: ExpoConfig = {
   },
   android: {
     package: 'com.kleenest.fleet',
+    icon: './assets/app-icon.png',
     permissions: ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION'],
   },
   web: { output: 'single', bundler: 'metro', name: 'Kleenest Fleet', shortName: 'Kleenest Fleet' },
