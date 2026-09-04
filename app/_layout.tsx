@@ -12,6 +12,7 @@ export default function RootLayout() {
         <Stack.Screen name="dispatch" options={{ title: 'Dispatch Center' }} />
         <Stack.Screen name="operations" options={{ title: 'Vehicles, Drivers & Maintenance' }} />
         <Stack.Screen name="execution" options={{ title: 'Route Execution' }} />
+        <Stack.Screen name="progression" options={{ title: 'Fleet Progression' }} />
         <Stack.Screen name="signals" options={{ title: 'Fleet Signals' }} />
         <Stack.Screen name="sync" options={{ title: 'Notifications & Offline' }} />
         <Stack.Screen name="intelligence" options={{ title: 'Fleet Intelligence' }} />
