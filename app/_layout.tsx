@@ -17,6 +17,7 @@ export default function RootLayout() {
         <Stack.Screen name="sync" options={{ title: 'Notifications & Offline' }} />
         <Stack.Screen name="intelligence" options={{ title: 'Fleet Intelligence' }} />
         <Stack.Screen name="metrics" options={{ title: 'Fleet Metrics' }} />
+        <Stack.Screen name="capabilities" options={{ title: 'Fleet Capabilities' }} />
         <Stack.Screen name="premium" options={{ title: 'Fleet Premium' }} />
         <Stack.Screen name="enterprise" options={{ title: 'Enterprise' }} />
       </Stack>
