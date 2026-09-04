@@ -47,6 +47,11 @@ jobs:
           test -n "$(find .preflight -type f -print -quit)"
       - name: Generate clean Android native project
         run: npx expo prebuild --platform android --clean
+      - name: Apply supplied Fleet launcher artwork
+        run: |
+          node scripts/apply-native-launcher-icon.mjs
+          test -s android/app/src/main/res/mipmap-mdpi/ic_launcher.png
+          test -s android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
       - name: Pre-package native and manifest diagnostics
         working-directory: android
         run: |
