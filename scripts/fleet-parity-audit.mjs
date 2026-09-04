@@ -50,4 +50,7 @@ for(const [name,version] of Object.entries({'expo':'~57.0.20','react':'19.2.3','
 if(pkg.dependencies?.['@maplibre/maplibre-react-native']!=='^11.3.6')throw new Error('Fleet parity: MapLibre native runtime must match Consumer');
 if(pkg.dependencies?.['expo-location']!=='~57.0.14')throw new Error('Fleet parity: expo-location must match Expo 57 Consumer runtime');
 if(pkg.scripts?.postinstall!=='node scripts/install-app-icon.mjs')throw new Error('Fleet parity: launcher icon installer is not wired to postinstall');
+const appConfig=read('app.config.ts').replace(/\s+/g,'');
+if(!appConfig.includes("icon:'./assets/app-icon.png'"))throw new Error('Fleet parity: Expo app icon is not configured');
+if(!appConfig.includes("android:{package:'com.kleenest.fleet',icon:'./assets/app-icon.png'"))throw new Error('Fleet parity: Android launcher icon is not configured');
 console.log('Fleet parity audit passed with hardened Supabase-to-UI coverage across routing, radius, map interaction, assignments, event timestamps, assets, policies, monitoring, performance, progression, metrics, Enterprise, OAuth and native runtime.');
