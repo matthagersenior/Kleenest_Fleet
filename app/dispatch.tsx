@@ -3,12 +3,23 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, TextInput, View } from 'react-native';
 import { FleetMap, FleetSelectedLocationCard } from '@/components/FleetMap';
 import { createRoute, dispatchRoute, listFleetInventory, listRouteStops, setRouteStops } from '@/services/fleet';
+import { updateRoute } from '@/services/parity';
 import { listFleetRouteLocations, routeLocationId, type FleetRouteLocation } from '@/services/locations';
 import { useFleetWorkspace } from '@/state/FleetWorkspace';
 
 type Inventory = Awaited<ReturnType<typeof listFleetInventory>>;
 type RouteStop = Record<string, any>;
 const FALLBACK_ORIGIN = { latitude: 39.8283, longitude: -98.5795, fallback: true };
+const NATIONAL_RADIUS_METERS = 4_500_000;
+const NEARBY_DEFAULT_RADIUS_METERS = 80_467;
+const RADIUS_CHOICES = [
+  { label: '5 mi', meters: 8_047 },
+  { label: '10 mi', meters: 16_093 },
+  { label: '25 mi', meters: 40_234 },
+  { label: '50 mi', meters: NEARBY_DEFAULT_RADIUS_METERS },
+  { label: '100 mi', meters: 160_934 },
+  { label: 'National', meters: NATIONAL_RADIUS_METERS },
+];
 
 export default function DispatchCenter() {
   const { workspace, refreshing: workspaceRefreshing, refresh: refreshWorkspace } = useFleetWorkspace();
@@ -20,9 +31,11 @@ export default function DispatchCenter() {
   const [vehicleId, setVehicleId] = useState('');
   const [driverId, setDriverId] = useState('');
   const [origin, setOrigin] = useState(FALLBACK_ORIGIN);
+  const [radiusMeters, setRadiusMeters] = useState(NATIONAL_RADIUS_METERS);
   const [routeLocations, setRouteLocations] = useState<FleetRouteLocation[]>([]);
   const [selectedLocationId, setSelectedLocationId] = useState('');
   const [search, setSearch] = useState('');
+  const [mapInteracting, setMapInteracting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,12 +53,11 @@ export default function DispatchCenter() {
     setDraftStopIds(nextStops.map(stop => String(stop.location_id ?? '')).filter(Boolean));
   }, [workspace, routeId]);
 
-  const loadRouteLocations = useCallback(async (query = search) => {
-    const radiusMeters = origin.fallback ? 4_500_000 : 80_000;
-    const next = await listFleetRouteLocations({ latitude: origin.latitude, longitude: origin.longitude, radiusMeters, search: query, limit: 180 });
+  const loadRouteLocations = useCallback(async (query = search, nextRadiusMeters = radiusMeters) => {
+    const next = await listFleetRouteLocations({ latitude: origin.latitude, longitude: origin.longitude, radiusMeters: nextRadiusMeters, search: query, limit: 180 });
     setRouteLocations(next);
-    if (!selectedLocationId && next[0]) setSelectedLocationId(routeLocationId(next[0]));
-  }, [origin, search, selectedLocationId]);
+    setSelectedLocationId(current => current && next.some(item => routeLocationId(item) === current) ? current : '');
+  }, [origin.latitude, origin.longitude, radiusMeters, search]);
 
   useEffect(() => { load().catch(cause => setError(cause instanceof Error ? cause.message : String(cause))); }, [load]);
   useEffect(() => {
@@ -53,9 +65,13 @@ export default function DispatchCenter() {
       if (permission.status !== 'granted') return;
       const current = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       setOrigin({ latitude: current.coords.latitude, longitude: current.coords.longitude, fallback: false });
+      setRadiusMeters(currentRadius => currentRadius === NATIONAL_RADIUS_METERS ? NEARBY_DEFAULT_RADIUS_METERS : currentRadius);
     }).catch(() => {});
   }, []);
-  useEffect(() => { loadRouteLocations().catch(cause => setError(cause instanceof Error ? cause.message : String(cause))); }, [origin]);
+  useEffect(() => {
+    setSelectedLocationId('');
+    loadRouteLocations(search, radiusMeters).catch(cause => setError(cause instanceof Error ? cause.message : String(cause)));
+  }, [origin.latitude, origin.longitude, radiusMeters]);
 
   const routes = useMemo(() => (inventory?.routes ?? []) as any[], [inventory]);
   const vehicles = useMemo(() => (inventory?.vehicles ?? []) as any[], [inventory]);
@@ -125,6 +141,14 @@ export default function DispatchCenter() {
     if (!draftStopIds.length) { setError('Add at least one location stop before saving.'); return; }
     await run('save-stops', () => setRouteStops(businessId, routeId, draftStopIds.map(location_id => ({ location_id, metadata: { source: 'fleet_map_planner' } }))), 'Route stop order saved.');
   }
+  async function assignRouteVehicle(nextVehicleId: string) {
+    if (!selectedRoute || routeLocked) return;
+    await run('route-vehicle', () => updateRoute(businessId, { ...selectedRoute, vehicle_id: nextVehicleId || null }), nextVehicleId ? 'Route vehicle assigned.' : 'Route vehicle cleared.');
+  }
+  async function assignRouteDriver(nextDriverId: string) {
+    if (!selectedRoute || routeLocked) return;
+    await run('route-driver', () => updateRoute(businessId, { ...selectedRoute, driver_id: nextDriverId || null }), nextDriverId ? 'Route driver assigned.' : 'Route driver cleared.');
+  }
   async function dispatch() {
     if (!selectedRoute) return;
     if (!selectedRoute.vehicle_id) { setError('Assign a vehicle before dispatch.'); return; }
@@ -135,23 +159,26 @@ export default function DispatchCenter() {
 
   const mapCenter: [number, number] = selectedLocation ? [Number(selectedLocation.longitude), Number(selectedLocation.latitude)] : [origin.longitude, origin.latitude];
 
-  return <ScrollView refreshControl={<RefreshControl refreshing={refreshing || workspaceRefreshing} onRefresh={reload} />} contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 70 }}>
+  return <ScrollView scrollEnabled={!mapInteracting} refreshControl={<RefreshControl refreshing={refreshing || workspaceRefreshing} onRefresh={reload} />} contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 70 }}>
     <View style={hero}>
       <Text style={{ color: '#c8ead7', fontWeight: '900', letterSpacing: 1 }}>MAP ROUTING + DISPATCH</Text>
       <Text style={{ color: 'white', fontSize: 24, fontWeight: '900' }}>Build a mission from the Kleenest location network</Text>
       <Text style={{ color: '#dce9e2', lineHeight: 20 }}>The same canonical places that power Consumer Explore now become ordered Fleet stops. Dispatch turns the route into a live operational mission for geofencing, timing, notifications, exceptions and progression.</Text>
     </View>
-    {origin.fallback ? <View style={warning}><Text style={{ color: '#6c511c' }}>Location permission is off. Search still works across the national network; enable location for nearby-first planning.</Text></View> : null}
+    {origin.fallback ? <View style={warning}><Text style={{ color: '#6c511c' }}>Location permission is off. The map starts at the U.S. center with National radius; enable location for nearby-first planning.</Text></View> : null}
     {error ? <View style={errorCard}><Text selectable style={{ color: '#9b2c2c', fontWeight: '700' }}>{error}</Text></View> : null}
     {notice ? <View style={noticeCard}><Text style={{ color: '#22563c', fontWeight: '700' }}>{notice}</Text></View> : null}
 
     <View style={card}>
       <Text style={heading}>Route location search</Text>
-      <View style={row}><TextInput value={search} onChangeText={setSearch} onSubmitEditing={() => loadRouteLocations(search)} placeholder="Search a place, address, city or brand" style={[input, { flex: 1, minWidth: 220 }]} /><Action label={busy === 'search' ? 'Searching…' : 'Search'} onPress={async () => { setBusy('search'); try { await loadRouteLocations(search); } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); } finally { setBusy(null); } }} /></View>
+      <View style={row}><TextInput value={search} onChangeText={setSearch} onSubmitEditing={() => loadRouteLocations(search)} placeholder="Search a place, address, city or brand" style={[input, { flex: 1, minWidth: 220 }]} /><Action label={busy === 'search' ? 'Searching…' : 'Search'} onPress={async () => { setBusy('search'); try { setSelectedLocationId(''); await loadRouteLocations(search); } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); } finally { setBusy(null); } }} /></View>
+      <Text style={label}>Search radius</Text>
+      <View style={row}>{RADIUS_CHOICES.map(choice => { const active = radiusMeters === choice.meters; return <Pressable key={choice.meters} accessibilityRole="radio" accessibilityState={{ selected: active }} onPress={() => setRadiusMeters(choice.meters)} style={{ borderRadius: 999, paddingHorizontal: 11, paddingVertical: 8, backgroundColor: active ? '#173f2d' : '#edf3ef' }}><Text style={{ fontWeight: '900', color: active ? 'white' : '#244d39' }}>{choice.label}</Text></Pressable>; })}</View>
+      <Text style={muted}>{routeLocations.length} candidates inside {RADIUS_CHOICES.find(choice => choice.meters === radiusMeters)?.label ?? `${Math.round(radiusMeters / 1609.344)} mi`}. Select a pin only when you want its details.</Text>
     </View>
 
-    <FleetMap center={mapCenter} locations={routeLocations} selectedId={selectedLocationId} routeStopIds={draftStopIds} onSelect={item => setSelectedLocationId(routeLocationId(item))} />
-    {selectedLocation ? <FleetSelectedLocationCard item={selectedLocation} stopIndex={draftStopIds.indexOf(routeLocationId(selectedLocation))} onToggleStop={() => toggleDraftStop(routeLocationId(selectedLocation))} /> : null}
+    <FleetMap center={mapCenter} locations={routeLocations} selectedId={selectedLocationId} routeStopIds={draftStopIds} onSelect={item => setSelectedLocationId(routeLocationId(item))} onInteractionChange={setMapInteracting} />
+    {selectedLocation ? <FleetSelectedLocationCard item={selectedLocation} stopIndex={draftStopIds.indexOf(routeLocationId(selectedLocation))} onToggleStop={() => toggleDraftStop(routeLocationId(selectedLocation))} onClose={() => setSelectedLocationId('')} /> : null}
 
     <View style={card}>
       <Text style={heading}>Create route</Text>
@@ -179,6 +206,12 @@ export default function DispatchCenter() {
       <Text style={muted}>Vehicle: {String(selectedVehicle?.name ?? selectedVehicle?.unit_code ?? 'Not assigned')}</Text>
       <Text style={muted}>Driver: {String(selectedDriver?.name ?? 'Not assigned')}</Text>
       <Text style={muted}>Status: {String(selectedRoute.status ?? 'planned').replaceAll('_', ' ')} · {routeLocked ? 'stop order locked' : 'stop order editable'}</Text>
+      {!routeLocked ? <>
+        <Text style={label}>Assign vehicle</Text>
+        <ChoiceRow items={vehicles} selectedId={String(selectedRoute.vehicle_id ?? '')} label={(item:any) => String(item.name ?? item.unit_code ?? 'Vehicle')} onSelect={assignRouteVehicle} empty="No active vehicles are available." />
+        <Text style={label}>Assign driver</Text>
+        <ChoiceRow items={drivers} selectedId={String(selectedRoute.driver_id ?? '')} label={(item:any) => String(item.name ?? 'Driver')} onSelect={assignRouteDriver} empty="No active drivers are available." />
+      </> : null}
       <Text style={label}>Draft stop order</Text>
       {draftStopIds.length === 0 ? <Text style={muted}>Tap map pins or search results and choose Add to route.</Text> : draftStopIds.map((id, index) => {
         const location = routeLocationById.get(id);
@@ -208,4 +241,4 @@ const noticeCard = { backgroundColor: '#e6f3eb' as const, borderRadius: 14, padd
 const warning = { backgroundColor: '#fff8e8' as const, borderRadius: 14, padding: 12 };
 function Status({ text }: { text: string }) { return <View style={{ backgroundColor: '#e3eee7', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5 }}><Text style={{ color: '#28533c', fontWeight: '800', fontSize: 12 }}>{text.replaceAll('_', ' ')}</Text></View>; }
 function Action({ label, onPress, disabled, secondary = false }: { label: string; onPress: () => void | Promise<void>; disabled?: boolean; secondary?: boolean }) { return <Pressable disabled={disabled} onPress={onPress} style={{ alignSelf: 'flex-start', backgroundColor: secondary ? '#edf3ef' : '#173f2d', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 9, opacity: disabled ? 0.45 : 1 }}><Text style={{ color: secondary ? '#244d39' : 'white', fontWeight: '900' }}>{label}</Text></Pressable>; }
-function ChoiceRow({ items, selectedId, label, onSelect, empty }: { items: any[]; selectedId: string; label: (item:any) => string; onSelect: (id:string) => void; empty:string }) { if (!items.length) return <Text style={muted}>{empty}</Text>; return <View style={row}>{items.map(item => { const id = String(item.id); const active = id === selectedId; return <Pressable key={id} onPress={() => onSelect(active ? '' : id)} style={{ backgroundColor: active ? '#173f2d' : '#edf3ef', borderRadius: 999, paddingHorizontal: 11, paddingVertical: 8 }}><Text style={{ color: active ? 'white' : '#244d39', fontWeight: '800' }}>{label(item)}</Text></Pressable>; })}</View>; }
+function ChoiceRow({ items, selectedId, label, onSelect, empty }: { items: any[]; selectedId: string; label: (item:any) => string; onSelect: (id:string) => void | Promise<void>; empty:string }) { if (!items.length) return <Text style={muted}>{empty}</Text>; return <View style={row}>{items.map(item => { const id = String(item.id); const active = id === selectedId; return <Pressable key={id} onPress={() => onSelect(active ? '' : id)} style={{ backgroundColor: active ? '#173f2d' : '#edf3ef', borderRadius: 999, paddingHorizontal: 11, paddingVertical: 8 }}><Text style={{ color: active ? 'white' : '#244d39', fontWeight: '800' }}>{label(item)}</Text></Pressable>; })}</View>; }
