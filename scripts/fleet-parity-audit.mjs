@@ -46,7 +46,7 @@ for(const token of ['Continue with Google','signInWithOAuth','exchangeCodeForSes
 if(!authCompact.includes("provider:'google'")&&!authCompact.includes('provider:"google"'))throw new Error('Fleet parity: Google auth must use the Supabase google provider');
 if(!authCompact.includes('skipBrowserRedirect:true'))throw new Error('Fleet parity: Google auth must use native browser handoff');
 const pkg=JSON.parse(read('package.json'));
-for(const [name,version] of Object.entries({'expo':'~57.0.17','react':'19.2.3','react-native':'0.86.3','react-native-reanimated':'4.5.1','react-native-worklets':'0.10.1'}))if(pkg.dependencies?.[name]!==version)throw new Error(`Fleet parity: ${name} must match Expo 57 runtime ${version}`);
+for(const [name,version] of Object.entries({'expo':'~57.0.20','react':'19.2.3','react-native':'0.86.3','react-native-reanimated':'4.5.1','react-native-worklets':'0.10.1'}))if(pkg.dependencies?.[name]!==version)throw new Error(`Fleet parity: ${name} must match Expo 57 runtime ${version}`);
 if(pkg.dependencies?.['@maplibre/maplibre-react-native']!=='^11.3.6')throw new Error('Fleet parity: MapLibre native runtime must match Consumer');
 if(pkg.dependencies?.['expo-location']!=='~57.0.14')throw new Error('Fleet parity: expo-location must match Expo 57 Consumer runtime');
 if(pkg.scripts?.postinstall!=='node scripts/install-app-icon.mjs')throw new Error('Fleet parity: launcher icon installer is not wired to postinstall');
