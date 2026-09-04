@@ -14,7 +14,7 @@
   "dependencies": {
     "@maplibre/maplibre-react-native": "^11.3.6",
     "@supabase/supabase-js": "^2.57.4",
-    "expo": "~57.0.17",
+    "expo": "~57.0.20",
     "expo-constants": "~57.0.16",
     "expo-linking": "~57.0.8",
     "expo-location": "~57.0.14",
