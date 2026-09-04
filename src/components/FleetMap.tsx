@@ -1,4 +1,5 @@
 import { Camera, Map, Marker } from '@maplibre/maplibre-react-native';
+import { useEffect, useState } from 'react';
 import { Image, Pressable, Text, View } from 'react-native';
 import { routeLocationId, type FleetRouteLocation } from '@/services/locations';
 
@@ -21,29 +22,68 @@ export function FleetMap({
   selectedId,
   routeStopIds,
   onSelect,
+  onInteractionChange,
 }: {
   center: [number, number];
   locations: FleetRouteLocation[];
   selectedId: string;
   routeStopIds: string[];
   onSelect: (location: FleetRouteLocation) => void;
+  onInteractionChange?: (active: boolean) => void;
 }) {
-  return <View style={{ height: 330, borderRadius: 18, overflow: 'hidden', backgroundColor: '#dfe8e2' }}>
+  const [zoom, setZoom] = useState(11.5);
+  const [cameraNonce, setCameraNonce] = useState(0);
+
+  useEffect(() => {
+    setCameraNonce(value => value + 1);
+  }, [center[0], center[1]]);
+
+  function changeZoom(delta: number) {
+    setZoom(current => Math.max(3, Math.min(18, current + delta)));
+    setCameraNonce(value => value + 1);
+  }
+
+  function recenter() {
+    setCameraNonce(value => value + 1);
+  }
+
+  return <View
+    onTouchStart={() => onInteractionChange?.(true)}
+    onTouchEnd={() => onInteractionChange?.(false)}
+    onTouchCancel={() => onInteractionChange?.(false)}
+    style={{ height: 350, borderRadius: 18, overflow: 'hidden', backgroundColor: '#dfe8e2' }}
+  >
     <Map androidView="texture" style={{ flex: 1 }} mapStyle={OSM_STYLE}>
-      <Camera key={`${center[0]}-${center[1]}`} initialViewState={{ center, zoom: 11.5 }} />
+      <Camera key={`${center[0]}-${center[1]}-${zoom}-${cameraNonce}`} initialViewState={{ center, zoom }} />
       {locations.map(item => {
         const id = routeLocationId(item);
         const selected = id === selectedId;
         const stopIndex = routeStopIds.indexOf(id);
         return <Marker key={id} id={`route-location-${id}`} lngLat={[Number(item.longitude), Number(item.latitude)]} anchor="bottom" onPress={() => onSelect(item)}>
-          <View style={{ minWidth: selected ? 40 : 32, height: selected ? 40 : 32, borderRadius: 22, backgroundColor: stopIndex >= 0 ? '#0f5132' : '#ffffff', borderWidth: selected ? 3 : 2, borderColor: selected ? '#f4b942' : '#173f2d', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`Select ${String(item.business_name ?? item.name ?? 'route location')}`}
+            hitSlop={12}
+            onPress={event => { event.stopPropagation(); onSelect(item); }}
+            style={{ minWidth: selected ? 40 : 32, height: selected ? 40 : 32, borderRadius: 22, backgroundColor: stopIndex >= 0 ? '#0f5132' : '#ffffff', borderWidth: selected ? 3 : 2, borderColor: selected ? '#f4b942' : '#173f2d', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}
+          >
             {item.business_logo_url ? <Image source={{ uri: String(item.business_logo_url) }} style={{ width: selected ? 30 : 24, height: selected ? 30 : 24, borderRadius: 15 }} resizeMode="contain" /> : <Text style={{ color: stopIndex >= 0 ? 'white' : '#173f2d', fontWeight: '900', fontSize: stopIndex >= 0 ? 13 : 11 }}>{stopIndex >= 0 ? stopIndex + 1 : String(item.business_name ?? item.name ?? 'K').slice(0, 1).toUpperCase()}</Text>}
-          </View>
+          </Pressable>
         </Marker>;
       })}
     </Map>
-    <View pointerEvents="none" style={{ position: 'absolute', left: 10, top: 10, backgroundColor: 'rgba(255,255,255,.94)', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 7 }}>
-      <Text style={{ color: '#173024', fontWeight: '900', fontSize: 12 }}>{locations.length} route candidates · {routeStopIds.length} selected stops</Text>
+    <View pointerEvents="none" style={{ position: 'absolute', left: 10, top: 10, right: 64, gap: 5 }}>
+      <View style={{ alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,.95)', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 7 }}>
+        <Text style={{ color: '#173024', fontWeight: '900', fontSize: 12 }}>{locations.length} route candidates · {routeStopIds.length} selected stops</Text>
+      </View>
+      <View style={{ alignSelf: 'flex-start', backgroundColor: 'rgba(23,63,45,.90)', borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5 }}>
+        <Text style={{ color: 'white', fontWeight: '800', fontSize: 10 }}>Drag to pan · pinch to zoom</Text>
+      </View>
+    </View>
+    <View style={{ position: 'absolute', right: 10, top: 10, gap: 7 }}>
+      <MapButton label="＋" accessibilityLabel="Zoom Fleet map in" onPress={() => changeZoom(1)} />
+      <MapButton label="−" accessibilityLabel="Zoom Fleet map out" onPress={() => changeZoom(-1)} />
+      <MapButton label="⌖" accessibilityLabel="Recenter Fleet map" onPress={recenter} />
     </View>
   </View>;
 }
@@ -52,16 +92,23 @@ export function FleetSelectedLocationCard({
   item,
   stopIndex,
   onToggleStop,
+  onClose,
 }: {
   item: FleetRouteLocation;
   stopIndex: number;
   onToggleStop: () => void;
+  onClose?: () => void;
 }) {
   const distance = Number(item.distance_meters);
   const distanceText = Number.isFinite(distance) ? `${(distance / 1609.344).toFixed(distance < 16093 ? 1 : 0)} mi` : 'distance unavailable';
   return <View style={{ backgroundColor: 'white', borderRadius: 16, padding: 14, gap: 7 }}>
-    <Text style={{ fontSize: 18, fontWeight: '900', color: '#173024' }}>{item.name ?? item.business_name ?? 'Route location'}</Text>
-    {item.business_name && item.business_name !== item.name ? <Text style={{ color: '#53685d', fontWeight: '700' }}>{item.business_name}</Text> : null}
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+      <View style={{ flex: 1 }}>
+        <Text style={{ fontSize: 18, fontWeight: '900', color: '#173024' }}>{item.name ?? item.business_name ?? 'Route location'}</Text>
+        {item.business_name && item.business_name !== item.name ? <Text style={{ color: '#53685d', fontWeight: '700' }}>{item.business_name}</Text> : null}
+      </View>
+      {onClose ? <Pressable accessibilityRole="button" accessibilityLabel="Close selected Fleet location" hitSlop={10} onPress={onClose} style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#edf3ef', alignItems: 'center', justifyContent: 'center' }}><Text style={{ color: '#173f2d', fontSize: 22, fontWeight: '900', lineHeight: 24 }}>×</Text></Pressable> : null}
+    </View>
     <Text style={{ color: '#66766e' }}>{[item.address, item.city, item.state].filter(Boolean).join(', ') || 'Address unavailable'} · {distanceText}</Text>
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
       {item.bathroom_verification_status ? <Badge text={String(item.bathroom_verification_status).replaceAll('_', ' ')} /> : null}
@@ -74,6 +121,10 @@ export function FleetSelectedLocationCard({
       <Text style={{ color: stopIndex >= 0 ? '#244d39' : 'white', fontWeight: '900' }}>{stopIndex >= 0 ? `Remove stop ${stopIndex + 1}` : 'Add to route'}</Text>
     </Pressable>
   </View>;
+}
+
+function MapButton({ label, accessibilityLabel, onPress }: { label: string; accessibilityLabel: string; onPress: () => void }) {
+  return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel} onPress={onPress} style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: 'rgba(255,255,255,.97)', borderWidth: 1, borderColor: '#cbd9d0', alignItems: 'center', justifyContent: 'center', elevation: 2 }}><Text style={{ color: '#173f2d', fontWeight: '900', fontSize: 21 }}>{label}</Text></Pressable>;
 }
 
 function Badge({ text }: { text: string }) {
