@@ -1,0 +1,59 @@
+name: Publish Standalone Installer
+
+on:
+  workflow_run:
+    workflows: ["Android Standalone APK"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: fleet-pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
+      - name: Export current Fleet web app
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ vars.EXPO_PUBLIC_SUPABASE_URL || 'https://ssgesjzdvdsqacdtasje.supabase.co' }}
+          EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_f1rbczgvWKSQy2g9mTDQZg_K9Wv19bL' }}
+        run: npx expo export --platform web --output-dir dist
+      - name: Download verified standalone APK from triggering run
+        uses: actions/download-artifact@v4
+        with:
+          name: Kleenest-Fleet-Standalone-APK
+          path: installer
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ github.event.workflow_run.id }}
+      - name: Publish direct installer alongside web app
+        run: |
+          test -s installer/Kleenest-Fleet-Standalone.apk
+          cp installer/Kleenest-Fleet-Standalone.apk dist/Kleenest-Fleet.apk
+          cp dist/index.html dist/404.html
+          touch dist/.nojekyll
+          sha256sum dist/Kleenest-Fleet.apk > dist/Kleenest-Fleet.apk.sha256
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - name: Deploy Fleet web app and direct APK
+        id: deployment
+        uses: actions/deploy-pages@v4
