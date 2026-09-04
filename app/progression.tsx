@@ -1,0 +1,20 @@
+import { useEffect,useState } from 'react';
+import { ActivityIndicator,RefreshControl,ScrollView,Text,View } from 'react-native';
+import { useFleetWorkspace } from '@/state/FleetWorkspace';
+import { getFleetProgressionSnapshot,type FleetProgressionSnapshot } from '@/services/progression';
+
+export default function FleetProgressionScreen(){
+ const{workspace}=useFleetWorkspace();
+ const[data,setData]=useState<FleetProgressionSnapshot|null>(null),[loading,setLoading]=useState(true),[refreshing,setRefreshing]=useState(false),[error,setError]=useState<string|null>(null);
+ async function load(refresh=false){if(!workspace?.business_id){setError('No Fleet workspace selected.');setLoading(false);return}refresh?setRefreshing(true):setLoading(true);setError(null);try{setData(await getFleetProgressionSnapshot(workspace.business_id))}catch(cause){setError(cause instanceof Error?cause.message:String(cause))}finally{setLoading(false);setRefreshing(false)}}
+ useEffect(()=>{void load()},[workspace?.business_id]);
+ if(loading)return <View style={{flex:1,alignItems:'center',justifyContent:'center'}}><ActivityIndicator size="large"/></View>;
+ return <ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={()=>load(true)}/>} contentContainerStyle={{padding:16,paddingBottom:48,gap:16}}>
+  <View style={{backgroundColor:'#173f2d',borderRadius:20,padding:18,gap:7}}><Text style={{color:'#c8ead7',fontWeight:'900',fontSize:11,letterSpacing:1}}>FLEET PROGRESSION</Text><Text style={{color:'white',fontWeight:'900',fontSize:23}}>Operational work can strengthen the Kleenest trust network.</Text><Text style={{color:'#dce9e2',lineHeight:20}}>Completed route stops use the same canonical progression stream as Consumer. Stop timing remains operational truth; XP is an idempotent downstream effect.</Text></View>
+  {error?<View style={{backgroundColor:'#fff0f0',borderRadius:14,padding:12}}><Text style={{color:'#982f2f',fontWeight:'800'}}>{error}</Text></View>:null}
+  <View style={{flexDirection:'row',flexWrap:'wrap',gap:10}}><Metric label="Routes" value={data?.routes_total??0}/><Metric label="Completed routes" value={data?.routes_completed??0}/><Metric label="Completed stops" value={data?.stops_completed??0}/><Metric label="Fleet XP" value={data?.fleet_xp??0}/></View>
+  <View style={{backgroundColor:'#eef4f0',borderRadius:18,padding:15,gap:6}}><Text style={{fontWeight:'900',fontSize:17,color:'#173024'}}>How awards work</Text><Text style={{color:'#607067',lineHeight:20}}>A route-stop completion first records canonical stop timing and operational events. The existing progression metric is bridged into the v2 XP ledger exactly once using the stop ID as the idempotency source. Replays do not farm XP.</Text></View>
+  <View style={{gap:9}}><Text style={{fontSize:22,fontWeight:'900',color:'#13271d'}}>Recent Fleet awards</Text>{data?.recent_fleet_awards?.length?data.recent_fleet_awards.map((item,index)=><View key={`${item.created_at}-${index}`} style={{backgroundColor:'white',borderRadius:16,padding:14,gap:4}}><View style={{flexDirection:'row',justifyContent:'space-between',gap:8}}><Text style={{fontWeight:'900',fontSize:15,color:'#173024',flex:1}}>Route stop completed</Text><Text style={{fontWeight:'900',fontSize:14,color:'#19603d'}}>+{Number(item.xp||0)} XP</Text></View><Text style={{fontSize:11,color:'#68786f'}}>{item.created_at?new Date(item.created_at).toLocaleString():''}{item.location_id?` · location ${item.location_id.slice(0,8)}…`:''}</Text></View>):<View style={{backgroundColor:'white',borderRadius:16,padding:14}}><Text style={{color:'#66766e'}}>No Fleet v2 XP awards have posted for this business yet.</Text></View>}</View>
+ </ScrollView>
+}
+function Metric({label,value}:{label:string;value:number}){return <View style={{backgroundColor:'white',borderRadius:17,padding:14,minWidth:140,flexBasis:'47%',flexGrow:1,gap:4}}><Text style={{color:'#697970',fontSize:12,fontWeight:'800'}}>{label}</Text><Text style={{fontSize:27,fontWeight:'900',color:'#14271d'}}>{Number(value||0).toLocaleString()}</Text></View>}
