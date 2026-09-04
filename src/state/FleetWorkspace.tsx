@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import * as SecureStore from 'expo-secure-store';
 import { getSupabaseClient } from '@/lib/supabase';
 import { getCurrentDispatch, getFleetAccess, getFleetDashboard, getFleetIntelligence, getFleetProductAccess } from '@/services/fleet';
 
@@ -18,6 +19,7 @@ type State = {
 };
 
 const FleetWorkspaceContext = createContext<State | null>(null);
+const WORKSPACE_KEY = 'kleenest.fleet.selected_workspace';
 
 async function loadWorkspaceData(selected: Workspace) {
   const businessId = selected.business_id;
@@ -68,11 +70,18 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
     setDispatch(detail.dispatch);
     setIntelligence(detail.intelligence);
     setEntitlement(detail.entitlement);
+    await SecureStore.setItemAsync(WORKSPACE_KEY, selected.business_id).catch(() => {});
   }, []);
 
   useEffect(() => {
-    setLoading(true);
-    hydrate().catch(cause => setError(cause instanceof Error ? cause.message : String(cause))).finally(() => setLoading(false));
+    let mounted = true;
+    (async () => {
+      const preferred = await SecureStore.getItemAsync(WORKSPACE_KEY).catch(() => null);
+      await hydrate(preferred ?? undefined);
+    })()
+      .catch(cause => { if (mounted) setError(cause instanceof Error ? cause.message : String(cause)); })
+      .finally(() => { if (mounted) setLoading(false); });
+    return () => { mounted = false; };
   }, [hydrate]);
 
   const refresh = useCallback(async () => {
@@ -84,8 +93,10 @@ export function FleetWorkspaceProvider({ children }: { children: ReactNode }) {
 
   const selectWorkspace = useCallback(async (businessId: string) => {
     setRefreshing(true);
-    try { await hydrate(businessId); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    try {
+      await SecureStore.setItemAsync(WORKSPACE_KEY, businessId);
+      await hydrate(businessId);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { setRefreshing(false); }
   }, [hydrate]);
 
