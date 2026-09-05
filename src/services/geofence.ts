@@ -1,4 +1,12 @@
+import Constants from 'expo-constants';
+import * as Location from 'expo-location';
+import * as Notifications from 'expo-notifications';
+import * as TaskManager from 'expo-task-manager';
+import { Platform } from 'react-native';
 import { getSupabaseClient } from '@/lib/supabase';
+
+export const FLEET_GEOFENCE_TASK='kleenest-fleet-live-network-geofence';
+const APP_ID='com.kleenest.fleet';
 
 export type FleetRouteGeofence = {
   route_stop_id: string;
@@ -10,6 +18,26 @@ export type FleetRouteGeofence = {
   radius_meters: number;
   location_name: string | null;
 };
+
+function encodeIdentifier(businessId:string,row:FleetRouteGeofence){return [row.geofence_id,businessId,row.location_id,row.route_stop_id,String(row.stop_order)].join('|')}
+function decodeIdentifier(value:string){const[geofenceId,businessId,locationId,routeStopId,stopOrder]=value.split('|');return{geofenceId,businessId,locationId,routeStopId,stopOrder:Number(stopOrder||0)}}
+
+if(!TaskManager.isTaskDefined(FLEET_GEOFENCE_TASK)){
+  TaskManager.defineTask(FLEET_GEOFENCE_TASK,async({data,error}:any)=>{
+    if(error||!data)return;
+    const ids=decodeIdentifier(String(data.region?.identifier??''));
+    if(!ids.geofenceId||!ids.businessId||!ids.locationId||!ids.routeStopId)return;
+    const eventType=data.eventType===Location.GeofencingEventType.Enter?'enter':data.eventType===Location.GeofencingEventType.Exit?'exit':'unknown';
+    if(eventType==='unknown')return;
+    const client=getSupabaseClient();
+    const {data:auth}=await client.auth.getUser();
+    if(!auth.user)return;
+    await client.rpc('record_geofence_event',{
+      p_geofence_id:ids.geofenceId,p_user_id:auth.user.id,p_location_id:ids.locationId,p_business_id:ids.businessId,p_event_type:eventType,p_dwell_seconds:null,
+      p_metadata:{source:'fleet_live_network_background',route_stop_id:ids.routeStopId,stop_order:ids.stopOrder,platform:Platform.OS},p_notification_id:null,p_qr_code_id:null,p_check_in_id:null
+    });
+  });
+}
 
 export async function getFleetRouteGeofenceManifest(businessId: string, routeId: string): Promise<FleetRouteGeofence[]> {
   const { data, error } = await getSupabaseClient().rpc('fleet_route_geofence_manifest', {
@@ -49,6 +77,42 @@ export async function recordFleetGeofenceEvent(
   });
   if (error) throw new Error(error.message);
   return String(data ?? '');
+}
+
+export async function registerFleetPush(){
+  const permission=await Notifications.requestPermissionsAsync();
+  if(permission.status!=='granted')throw new Error('Notification permission is required for Fleet Live Network alerts.');
+  if(Platform.OS==='android')await Notifications.setNotificationChannelAsync('live-network',{name:'Live Network',importance:Notifications.AndroidImportance.HIGH});
+  const projectId=String(Constants.expoConfig?.extra?.eas?.projectId??'');
+  if(!projectId)throw new Error('Expo project identity is missing for Fleet push registration.');
+  const token=await Notifications.getExpoPushTokenAsync({projectId});
+  const {error}=await getSupabaseClient().rpc('register_notification_native_push_token',{p_token:token.data,p_platform:Platform.OS,p_app_id:APP_ID});
+  if(error)throw new Error(error.message);
+  return token.data;
+}
+
+export async function getFleetLiveNetworkStatus(){
+  const[foreground,background,services,registered]=await Promise.all([Location.getForegroundPermissionsAsync(),Location.getBackgroundPermissionsAsync(),Location.hasServicesEnabledAsync(),TaskManager.isTaskRegisteredAsync(FLEET_GEOFENCE_TASK).catch(()=>false)]);
+  return{foreground:foreground.status,background:background.status,services,registered};
+}
+
+export async function enableFleetLiveNetwork(businessId:string,routeId:string){
+  const foreground=await Location.requestForegroundPermissionsAsync();
+  if(foreground.status!=='granted')throw new Error('Location permission is required for Fleet Live Network.');
+  const background=await Location.requestBackgroundPermissionsAsync();
+  if(background.status!=='granted')throw new Error('Background location permission is required for route geofence alerts while Fleet is not open.');
+  const manifest=await getFleetRouteGeofenceManifest(businessId,routeId);
+  if(!manifest.length)throw new Error('This route has no geofence-ready stops. Add canonical route stops before enabling Live Network.');
+  const maximum=Platform.OS==='ios'?20:100;
+  const regions=manifest.slice(0,maximum).map(row=>({identifier:encodeIdentifier(businessId,row),latitude:Number(row.latitude),longitude:Number(row.longitude),radius:Math.max(50,Math.min(Number(row.radius_meters||150),1000)),notifyOnEnter:true,notifyOnExit:true}));
+  await Location.startGeofencingAsync(FLEET_GEOFENCE_TASK,regions);
+  await registerFleetPush();
+  return{registered:regions.length,total:manifest.length,platformLimit:maximum};
+}
+
+export async function disableFleetLiveNetwork(){
+  const registered=await TaskManager.isTaskRegisteredAsync(FLEET_GEOFENCE_TASK).catch(()=>false);
+  if(registered)await Location.stopGeofencingAsync(FLEET_GEOFENCE_TASK);
 }
 
 export function distanceMeters(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }) {
