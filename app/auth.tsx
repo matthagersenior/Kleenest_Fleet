@@ -15,7 +15,8 @@ export default function FleetSignIn() {
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  async function finishGoogle(url:string|null){if(!url)return false;const parsed=Linking.parse(url);const code=typeof parsed.queryParams?.code==='string'?parsed.queryParams.code:'';if(!code)return false;setBusy(true);setError(null);const client=getSupabaseClient();try{const {error:exchangeError}=await client.auth.exchangeCodeForSession(code);if(exchangeError)throw exchangeError;try{await refresh();}catch(cause){await client.auth.signOut({scope:'local'});throw cause;}router.replace('/');return true;}catch(cause){setError(cause instanceof Error?cause.message:String(cause));return false;}finally{setBusy(false);}}
+  function returnToControlCenter(){if(router.canGoBack())router.back();else router.replace('/');}
+  async function finishGoogle(url:string|null){if(!url)return false;const parsed=Linking.parse(url);const code=typeof parsed.queryParams?.code==='string'?parsed.queryParams.code:'';if(!code)return false;setBusy(true);setError(null);const client=getSupabaseClient();try{const {error:exchangeError}=await client.auth.exchangeCodeForSession(code);if(exchangeError)throw exchangeError;try{await refresh();}catch(cause){await client.auth.signOut({scope:'local'});throw cause;}returnToControlCenter();return true;}catch(cause){setError(cause instanceof Error?cause.message:String(cause));return false;}finally{setBusy(false);}}
   useEffect(()=>{void Linking.getInitialURL().then(finishGoogle);const sub=Linking.addEventListener('url',event=>{void finishGoogle(event.url)});return()=>sub.remove();},[]);
   async function signIn() {
     setBusy(true); setError(null);
@@ -24,7 +25,7 @@ export default function FleetSignIn() {
       const { error: authError } = await client.auth.signInWithPassword({ email: email.trim(), password });
       if (authError) throw authError;
       try { await refresh(); } catch (cause) { await client.auth.signOut({ scope: 'local' }); throw cause; }
-      router.replace('/');
+      returnToControlCenter();
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { setBusy(false); }
   }
