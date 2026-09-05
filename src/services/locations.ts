@@ -25,6 +25,15 @@ export type FleetRouteLocation = {
 
 const client = () => getSupabaseClient();
 
+let routeLocationRequestGeneration = 0;
+let latestRouteLocationRequest: Promise<FleetRouteLocation[]> | null = null;
+
+function normalizeRouteLocations(data: unknown): FleetRouteLocation[] {
+  return (Array.isArray(data) ? data : [])
+    .map((row: any) => ({ ...row, location_id: String(row.location_id ?? row.place_id ?? '') }))
+    .filter((row: FleetRouteLocation) => Boolean(row.location_id) && Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude)));
+}
+
 export async function listFleetRouteLocations(input: {
   latitude: number;
   longitude: number;
@@ -32,19 +41,33 @@ export async function listFleetRouteLocations(input: {
   search?: string;
   limit?: number;
 }): Promise<FleetRouteLocation[]> {
-  const { data, error } = await client().rpc('map_network_nearby_v2', {
-    p_lat: input.latitude,
-    p_lng: input.longitude,
-    p_radius_m: input.radiusMeters ?? 30000,
-    p_limit: input.limit ?? 150,
-    p_category: 'all',
-    p_search: input.search?.trim() || null,
-    p_amenity_names: [],
-  });
-  if (error) throw new Error(error.message);
-  return (Array.isArray(data) ? data : [])
-    .map((row: any) => ({ ...row, location_id: String(row.location_id ?? row.place_id ?? '') }))
-    .filter((row: FleetRouteLocation) => Boolean(row.location_id) && Number.isFinite(Number(row.latitude)) && Number.isFinite(Number(row.longitude)));
+  const generation = ++routeLocationRequestGeneration;
+  const request = (async () => {
+    const { data, error } = await client().rpc('map_network_nearby_v2', {
+      p_lat: input.latitude,
+      p_lng: input.longitude,
+      p_radius_m: input.radiusMeters ?? 30000,
+      p_limit: input.limit ?? 150,
+      p_category: 'all',
+      p_search: input.search?.trim() || null,
+      p_amenity_names: [],
+    });
+    if (error) throw new Error(error.message);
+    return normalizeRouteLocations(data);
+  })();
+
+  latestRouteLocationRequest = request;
+  const rows = await request;
+  if (generation === routeLocationRequestGeneration) return rows;
+
+  // First-open location hydration can intentionally replace the national fallback
+  // with a GPS-scoped request. If an older RPC resolves after the newer one began,
+  // return the newest request's rows to every caller so stale pins cannot overwrite
+  // the current map. If the newest request fails, keep the valid older rows as a
+  // graceful fallback instead of blanking the map.
+  const newest = latestRouteLocationRequest;
+  if (newest && newest !== request) return newest.catch(() => rows);
+  return rows;
 }
 
 export function routeLocationId(item: Pick<FleetRouteLocation, 'location_id' | 'place_id'>) {
