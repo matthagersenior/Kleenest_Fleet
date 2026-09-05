@@ -1,6 +1,12 @@
 import type { ExpoConfig } from 'expo/config';
 
-const EAS_PROJECT_ID = '90d1d6ff-1376-4065-a00c-7cf0415e4347';
+const EXPECTED_EAS_PROJECT_ID = '90d1d6ff-1376-4065-a00c-7cf0415e4347';
+const configuredEasProjectId = process.env.EAS_PROJECT_ID;
+if (configuredEasProjectId && configuredEasProjectId !== EXPECTED_EAS_PROJECT_ID) {
+  throw new Error(`[Kleenest Fleet] EAS_PROJECT_ID drift detected. Expected ${EXPECTED_EAS_PROJECT_ID}, received ${configuredEasProjectId}.`);
+}
+const EAS_PROJECT_ID = configuredEasProjectId || EXPECTED_EAS_PROJECT_ID;
+const otaChannel = process.env.EXPO_PUBLIC_OTA_CHANNEL || 'fleet-production';
 
 const config: ExpoConfig = {
   name: 'Kleenest Fleet',
@@ -13,7 +19,7 @@ const config: ExpoConfig = {
     url: `https://u.expo.dev/${EAS_PROJECT_ID}`,
     checkAutomatically: 'ON_LOAD',
     fallbackToCacheTimeout: 0,
-    requestHeaders: { 'expo-channel-name': 'fleet-production' },
+    requestHeaders: { 'expo-channel-name': otaChannel },
   },
   orientation: 'portrait',
   scheme: 'kleenest-fleet',
@@ -51,7 +57,7 @@ const config: ExpoConfig = {
   experiments: { typedRoutes: true, baseUrl: '/Kleenest_Fleet' },
   extra: {
     appRole: 'fleet',
-    otaChannel: 'fleet-production',
+    otaChannel,
     supabaseProjectRef: 'ssgesjzdvdsqacdtasje',
     eas: { projectId: EAS_PROJECT_ID },
   },
