@@ -39,6 +39,7 @@ for(const token of ['getEnterpriseOperationalPortfolio','createEnterpriseNetwork
 if(!signals.match(/signal|occupancy|location/i))throw new Error('Fleet parity: signal service lacks live operational signals');
 const operations=read('app/operations.tsx');
 if(!operations.includes('attachPreventiveWorkToRoute'))throw new Error('Fleet parity: preventive work cannot be attached from Fleet operations');
+for(const token of ['updateVehicle','deleteVehicle','updateDriver','deleteDriver','assignDriverUser','updateRoute','deleteRoute','updateMaintenance','deleteMaintenance','Edit vehicle','Edit driver','Edit route','Edit maintenance'])if(!operations.includes(token))throw new Error(`Fleet parity: operational CRUD surface missing ${token}`);
 const auth=read('app/auth.tsx');
 const authCompact=auth.replace(/\s+/g,'');
 if(!auth.includes('signInWithPassword')||!auth.includes('await refresh()'))throw new Error('Fleet parity: login does not verify Fleet workspace authorization');
