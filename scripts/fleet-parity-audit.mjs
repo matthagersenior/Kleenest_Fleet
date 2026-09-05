@@ -42,6 +42,7 @@ if(!operations.includes('attachPreventiveWorkToRoute'))throw new Error('Fleet pa
 const auth=read('app/auth.tsx');
 const authCompact=auth.replace(/\s+/g,'');
 if(!auth.includes('signInWithPassword')||!auth.includes('await refresh()'))throw new Error('Fleet parity: login does not verify Fleet workspace authorization');
+if(!auth.includes('router.canGoBack()')||!auth.includes('router.back()'))throw new Error('Fleet parity: successful sign-in must dismiss the existing auth screen instead of stacking a duplicate Control Center');
 for(const token of ['Continue with Google','signInWithOAuth','exchangeCodeForSession','Linking.createURL','Linking.openURL'])if(!auth.includes(token))throw new Error(`Fleet parity: Google auth missing ${token}`);
 if(!authCompact.includes("provider:'google'")&&!authCompact.includes('provider:"google"'))throw new Error('Fleet parity: Google auth must use the Supabase google provider');
 if(!authCompact.includes('skipBrowserRedirect:true'))throw new Error('Fleet parity: Google auth must use native browser handoff');
