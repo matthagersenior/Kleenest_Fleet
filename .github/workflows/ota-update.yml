@@ -9,6 +9,7 @@ on:
       - 'src/**'
       - 'scripts/**'
       - 'app.config.ts'
+      - 'eas.json'
       - '.github/workflows/ota-update.yml'
 
 permissions:
@@ -21,9 +22,11 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EAS_PROJECT_ID: 90d1d6ff-1376-4065-a00c-7cf0415e4347
+      EXPO_PUBLIC_OTA_CHANNEL: fleet-production
       EXPO_PUBLIC_SUPABASE_URL: https://ssgesjzdvdsqacdtasje.supabase.co
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_f1rbczgvWKSQy2g9mTDQZg_K9Wv19bL
     steps:
@@ -38,13 +41,30 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Verify Expo authentication
         run: npx eas-cli@latest whoami --non-interactive
-      - name: Verify current Fleet dispatch source
+      - name: Verify dedicated Fleet Expo identity
         run: |
-          grep -q 'Search radius' app/dispatch.tsx
-          grep -q 'National' app/dispatch.tsx
-          grep -q 'Assign vehicle' app/dispatch.tsx
-          grep -q 'onInteractionChange' src/components/FleetMap.tsx
-          grep -q "order('occurred_at'" src/services/signals.ts
-          grep -q 'e.occurred_at' app/sync.tsx
+          npx expo config --type public --json > expo-config.json
+          node <<'NODE'
+          const fs=require('fs');
+          const c=JSON.parse(fs.readFileSync('expo-config.json','utf8'));
+          const project='90d1d6ff-1376-4065-a00c-7cf0415e4347';
+          const channel='fleet-production';
+          const failures=[];
+          if(c.slug!=='kleenest-fleet')failures.push(`slug=${c.slug}`);
+          if(c.extra?.eas?.projectId!==project)failures.push(`projectId=${c.extra?.eas?.projectId}`);
+          if(c.updates?.url!==`https://u.expo.dev/${project}`)failures.push(`updates.url=${c.updates?.url}`);
+          if(c.updates?.requestHeaders?.['expo-channel-name']!==channel)failures.push(`channel=${c.updates?.requestHeaders?.['expo-channel-name']}`);
+          if(c.runtimeVersion!=='kleenest-fleet-0.1.0')failures.push(`runtimeVersion=${c.runtimeVersion}`);
+          if(failures.length)throw new Error(`Fleet Expo identity mismatch: ${failures.join(', ')}`);
+          console.log('Fleet Expo identity and OTA channel verified.');
+          NODE
+      - name: Verify Fleet release source
+        run: |
+          npm run audit
+          npm run typecheck
       - name: Publish Fleet OTA update
         run: npx eas-cli@latest update --channel fleet-production --message "Fleet ${GITHUB_SHA}" --non-interactive
+      - name: Verify Fleet OTA is discoverable
+        run: |
+          npx eas-cli@latest update:list --channel fleet-production --limit 1 --json --non-interactive > ota-latest.json
+          grep -q "$GITHUB_SHA" ota-latest.json
