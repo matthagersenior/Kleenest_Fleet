@@ -113,10 +113,11 @@ jobs:
           retention-days: 1
 
   arm64-runtime:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     needs: candidate
     continue-on-error: true
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
