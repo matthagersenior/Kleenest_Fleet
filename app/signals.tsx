@@ -2,15 +2,18 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { listFleetInventory } from '@/services/fleet';
 import { disableFleetLiveNetwork,enableFleetLiveNetwork,getFleetLiveNetworkStatus,registerFleetPush } from '@/services/geofence';
+import { listLiveNetworkMotifs,subscribeLiveNetworkMotifs,type LiveNetworkMotif } from '@/services/liveNetworkMotifs';
 import { configureGeofence, getOccupancySummary, listBusinessGeofences, listBusinessLocations, listMonitoredLocations, removeMonitoredLocation, setMonitoredLocation } from '@/services/signals';
 import { useFleetWorkspace } from '@/state/FleetWorkspace';
 
 export default function FleetSignalsScreen() {
   const { workspace, entitlement, refreshing: workspaceRefreshing, refresh: refreshWorkspace } = useFleetWorkspace();
+  const businessId=workspace?.business_id??null;
   const [locations, setLocations] = useState<any[]>([]);
   const [monitored, setMonitored] = useState<any[]>([]);
   const [geofences, setGeofences] = useState<any[]>([]);
   const [routes,setRoutes]=useState<any[]>([]);
+  const [motifs,setMotifs]=useState<LiveNetworkMotif[]>([]);
   const [selectedRouteId,setSelectedRouteId]=useState<string|null>(null);
   const [liveStatus,setLiveStatus]=useState<Awaited<ReturnType<typeof getFleetLiveNetworkStatus>>|null>(null);
   const [occupancy, setOccupancy] = useState<Record<string, unknown>>({});
@@ -18,19 +21,19 @@ export default function FleetSignalsScreen() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice,setNotice]=useState<string|null>(null);
+  const [lastLiveAt,setLastLiveAt]=useState<string|null>(null);
 
   const load = useCallback(async () => {
-    if (!workspace) return;
-    const businessId = workspace.business_id;
-    const [nextLocations, nextMonitored, nextGeofences,inventory,status] = await Promise.all([listBusinessLocations(businessId), listMonitoredLocations(businessId), listBusinessGeofences(businessId),listFleetInventory(businessId),getFleetLiveNetworkStatus()]);
-    setLocations(nextLocations as any[]); setMonitored(nextMonitored); setGeofences(nextGeofences as any[]);setRoutes(inventory.routes as any[]);setLiveStatus(status);
+    if (!businessId) return;
+    const [nextLocations, nextMonitored, nextGeofences,inventory,status,nextMotifs] = await Promise.all([listBusinessLocations(businessId), listMonitoredLocations(businessId), listBusinessGeofences(businessId),listFleetInventory(businessId),getFleetLiveNetworkStatus(),listLiveNetworkMotifs(businessId,60)]);
+    setLocations(nextLocations as any[]); setMonitored(nextMonitored); setGeofences(nextGeofences as any[]);setRoutes(inventory.routes as any[]);setLiveStatus(status);setMotifs(nextMotifs);
     setSelectedRouteId(current=>(inventory.routes as any[]).some((r:any)=>String(r.id)===current)?current:String((inventory.routes as any[])[0]?.id??'')||null);
     const summaries = await Promise.all(nextMonitored.map(async row => [String(row.location_id), await getOccupancySummary(String(row.location_id))] as const));
     setOccupancy(Object.fromEntries(summaries));
-  }, [workspace]);
+  }, [businessId]);
   useEffect(() => { load().catch(cause => setError(cause instanceof Error ? cause.message : String(cause))); }, [load]);
-  if (!workspace) return <View style={{ padding: 20 }}><Text>Fleet workspace required.</Text></View>;
-  const businessId = workspace.business_id;
+  useEffect(()=>businessId?subscribeLiveNetworkMotifs(businessId,()=>{setLastLiveAt(new Date().toISOString());listLiveNetworkMotifs(businessId,60).then(setMotifs).catch(cause=>setError(cause instanceof Error?cause.message:String(cause)))}):undefined,[businessId]);
+  if (!workspace||!businessId) return <View style={{ padding: 20 }}><Text>Fleet workspace required.</Text></View>;
   const product = entitlement?.productAccess as Record<string, unknown> | undefined;
   const enterprise = Boolean(product?.enterprise_enabled);
   const monitoredIds = new Set(monitored.map(row => String(row.location_id)));
@@ -40,14 +43,20 @@ export default function FleetSignalsScreen() {
 
   return <ScrollView refreshControl={<RefreshControl refreshing={refreshing || workspaceRefreshing} onRefresh={reload} />} contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 56 }}>
     {error ? <Text style={{ color: '#9b2c2c',fontWeight:'800' }}>{error}</Text> : null}{notice?<Text style={{color:'#1d6b43',fontWeight:'800'}}>{notice}</Text>:null}
-    <View style={{ backgroundColor: '#173f2d', borderRadius: 20, padding: 18, gap: 7 }}><Text style={{ color: '#c8ead7', fontSize: 12, fontWeight: '800' }}>FLEET LIVE NETWORK</Text><Text style={{ color: 'white', fontSize: 22, fontWeight: '800' }}>Monitored locations, occupancy and route geofences</Text><Text style={{ color: '#dce9e2' }}>{enterprise ? 'Enterprise monitoring is enabled for multiple locations.' : 'Fleet monitoring uses the selected workspace and canonical route stops.'}</Text></View>
+    <View style={{ backgroundColor: '#173f2d', borderRadius: 20, padding: 18, gap: 7 }}><Text style={{ color: '#c8ead7', fontSize: 12, fontWeight: '800' }}>FLEET LIVE NETWORK</Text><Text style={{ color: 'white', fontSize: 22, fontWeight: '800' }}>Routes, geofences and realtime operating motifs</Text><Text style={{ color: '#dce9e2' }}>{enterprise ? 'Enterprise monitoring is enabled across the selected Fleet workspace.' : 'Fleet monitoring uses canonical route stops, geofence events and operational intelligence.'}</Text></View>
+    <View style={row}><Pill label={`${motifs.filter(item=>item.severity!=='quiet').length} active motifs`}/><Pill label={lastLiveAt?'Realtime updated':'Realtime listening'}/><Pill label={`${geofences.length} business geofences`}/></View>
+    <View style={card}><Text style={kicker}>REALTIME ANALYSIS · LAST 60 MIN</Text><Text style={heading}>Operational motifs</Text><Text style={muted}>Fleet motifs combine route intent, geofence flow, occupancy, quality evidence, operational events and active alerts for this authorized workspace.</Text></View>
+    <View style={{gap:9}}>{motifs.map(item=><MotifCard key={item.motif_key} item={item}/>)}</View>
     <View style={card}><Text style={heading}>Live Network route execution</Text><Text style={muted}>Enable background route geofences to record enter/exit events and deliver Fleet notifications while the app is not open. Location and notification permissions are requested only when you enable this feature.</Text><View style={row}><Pill label={liveStatus?.registered?'RUNNING':'OFF'}/><Pill label={`Foreground ${liveStatus?.foreground??'unknown'}`}/><Pill label={`Background ${liveStatus?.background??'unknown'}`}/></View>{routes.length?<><Text style={{fontWeight:'800'}}>Route</Text><View style={row}>{routes.map((route:any)=>{const selected=String(route.id)===selectedRouteId;return <Pressable key={String(route.id)} onPress={()=>setSelectedRouteId(String(route.id))} style={{borderRadius:999,paddingHorizontal:11,paddingVertical:8,backgroundColor:selected?'#173f2d':'#edf3ef'}}><Text style={{fontWeight:'800',color:selected?'white':'#244d39'}}>{String(route.name??'Route')}</Text></Pressable>})}</View><View style={row}><Button disabled={!selectedRouteId||Boolean(busy)} label={busy==='live:on'?'Enabling…':'Enable Live Network'} onPress={()=>selectedRouteId?run('live:on',()=>enableFleetLiveNetwork(businessId,selectedRouteId),'Fleet Live Network enabled for the selected route.'):undefined}/><Button disabled={Boolean(busy)||!liveStatus?.registered} label="Disable Live Network" onPress={()=>run('live:off',disableFleetLiveNetwork,'Fleet Live Network disabled on this device.')}/><Button disabled={Boolean(busy)} label="Register push" onPress={()=>run('live:push',registerFleetPush,'Fleet push delivery registered.')}/></View></>:<Text style={muted}>Create a Fleet route with canonical stops before enabling route geofences.</Text>}</View>
     <View style={{ gap: 9 }}><Text style={heading}>Business locations</Text>{locations.map((location: any) => { const id = String(location.id); const active = monitoredIds.has(id); return <View key={id} style={card}><Text style={{ fontSize: 16, fontWeight: '800' }}>{String(location.name ?? 'Location')}</Text><Text style={muted}>{[location.address,location.city,location.state].filter(Boolean).join(', ')}</Text><Button disabled={busy === id} label={active ? 'Stop monitoring' : 'Monitor location'} onPress={() => run(id, () => active ? removeMonitoredLocation(businessId,id) : setMonitoredLocation(businessId,id,true))}/></View>; })}</View>
     <View style={{ gap: 9 }}><Text style={heading}>Live occupancy signals</Text>{monitored.length?monitored.map((row: any) => {const value=occupancy[String(row.location_id)] as Record<string,unknown>|undefined;return <View key={String(row.location_id)} style={card}><Text style={{ fontSize: 16, fontWeight: '800' }}>{String(row.location_name ?? 'Monitored location')}</Text><Text style={muted}>{value?Object.entries(value).slice(0,6).map(([k,v])=>`${k.replaceAll('_',' ')}: ${String(v)}`).join(' · '):'No current occupancy signal'}</Text></View>}):<Text style={muted}>No monitored locations yet.</Text>}</View>
     <View style={{ gap: 9 }}><Text style={heading}>Business geofences</Text>{geofences.length === 0 ? <Text style={muted}>No Business geofences currently exist for this Fleet workspace. Route geofences are generated from canonical route stops.</Text> : geofences.map((geofence: any) => <View key={String(geofence.id)} style={card}><Text style={{ fontWeight: '800' }}>{Number(geofence.radius_meters ?? 150)}m geofence</Text><Text style={muted}>{geofence.active === false ? 'Inactive' : 'Active'} · notifications {geofence.notification_enabled ? 'on' : 'off'}</Text><Button disabled={busy === `geo:${geofence.id}`} label="Toggle notifications" onPress={() => run(`geo:${geofence.id}`, () => configureGeofence(String(geofence.id), { notificationEnabled: !geofence.notification_enabled, active: true, title: 'Fleet location signal', body: 'A Kleenest Fleet geofence signal was recorded.' }))}/></View>)}</View>
-    <View style={card}><Text style={heading}>Permission safety</Text><Text style={muted}>Fleet Live Network uses location and notifications. Microphone and draw-over-other-apps permissions are explicitly blocked because they are unrelated to routing or geofencing.</Text></View>
+    <View style={card}><Text style={heading}>Permission safety</Text><Text style={muted}>Fleet Live Network uses location and notifications. Motif analysis is workspace-scoped and does not expose raw user identity. Microphone and draw-over-other-apps permissions remain blocked.</Text></View>
   </ScrollView>;
 }
+function MotifCard({item}:{item:LiveNetworkMotif}){return <View style={card}><View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'flex-start',gap:10}}><View style={{flex:1,gap:3}}><Text style={{fontSize:17,fontWeight:'900',color:'#173024'}}>{item.label}</Text><Text style={muted}>{motifDetail(item)}</Text></View><Pill label={item.severity.toUpperCase()}/></View><View style={row}><Pill label={`${item.observed_count} signals`}/><Pill label={`${Math.round(item.confidence*100)}% confidence`}/>{item.last_seen_at?<Pill label={`Seen ${formatTime(item.last_seen_at)}`}/>:null}</View></View>}
+function motifDetail(item:LiveNetworkMotif){const e=item.evidence??{};switch(item.motif_key){case'network_momentum':return `${num(e.routes)} recent route intents in this workspace.`;case'geofence_flow':return `${num(e.enters)} enters · ${num(e.exits)} exits · ${num(e.dwells)} dwell observations.`;case'occupancy_pressure':return `${pct(e.occupancy_ratio)} occupancy · ${num(e.queue_avg,1)} avg queue · ${num(e.wait_minutes_avg,1)} min avg wait.`;case'quality_drift':return `Cleanliness ${num(e.cleanliness_avg,1)} · safety ${num(e.safety_avg,1)} · availability ${num(e.availability_avg,1)}.`;case'fleet_pressure':return `${num(e.operational_events)} operational events · ${num(e.open_alerts)} open alerts.`;case'source_health':return `${num(e.degraded)} degraded sources · ${num(e.recovered)} recovered sources.`;default:return `${item.observed_count} canonical signals contributed.`}}
+function num(value:unknown,digits=0){const n=Number(value);return Number.isFinite(n)?n.toFixed(digits):'—'}function pct(value:unknown){const n=Number(value);return Number.isFinite(n)?`${Math.round(n*100)}%`:'—'}function formatTime(value:string){const d=new Date(value);return Number.isNaN(d.getTime())?'recently':d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})}
 function Button({label,onPress,disabled}:{label:string;onPress?:()=>void|Promise<void>;disabled?:boolean}){return <Pressable disabled={disabled} onPress={onPress} style={{alignSelf:'flex-start',backgroundColor:'#edf3ef',borderRadius:999,paddingHorizontal:12,paddingVertical:8,opacity:disabled?.5:1}}><Text style={{color:'#244d39',fontWeight:'800'}}>{label}</Text></Pressable>}
 function Pill({label}:{label:string}){return <View style={{backgroundColor:'#edf3ef',borderRadius:999,paddingHorizontal:9,paddingVertical:5}}><Text style={{fontSize:11,fontWeight:'800',color:'#244d39'}}>{label}</Text></View>}
-const card={backgroundColor:'white' as const,borderRadius:16,padding:14,gap:8};const heading={fontSize:20,fontWeight:'800' as const};const muted={color:'#66766e' as const,lineHeight:19};const row={flexDirection:'row' as const,flexWrap:'wrap' as const,gap:8};
+const card={backgroundColor:'white' as const,borderRadius:16,padding:14,gap:8};const heading={fontSize:20,fontWeight:'800' as const};const kicker={fontSize:10,fontWeight:'900' as const,letterSpacing:1.1,color:'#547060' as const};const muted={color:'#66766e' as const,lineHeight:19};const row={flexDirection:'row' as const,flexWrap:'wrap' as const,gap:8};
