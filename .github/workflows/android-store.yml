@@ -1,0 +1,66 @@
+name: Build Fleet Play AAB
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/android-store.yml'
+      - 'app/**'
+      - 'src/**'
+      - 'components/**'
+      - 'services/**'
+      - 'app.config.ts'
+      - 'eas.json'
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: read
+
+jobs:
+  store-aab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EAS_PROJECT_ID: 90d1d6ff-1376-4065-a00c-7cf0415e4347
+      EXPO_PUBLIC_OTA_CHANNEL: fleet-production
+      EXPO_PUBLIC_SUPABASE_URL: https://ssgesjzdvdsqacdtasje.supabase.co
+      EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_f1rbczgvWKSQy2g9mTDQZg_K9Wv19bL
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Require Expo automation token
+        run: test -n "$EXPO_TOKEN"
+      - name: Install and verify Fleet
+        run: |
+          npm install --no-audit --no-fund
+          npm run audit
+          npm run typecheck
+          npx eas-cli@latest whoami
+          npx expo config --type public > /tmp/kleenest-fleet-config.txt
+          grep -q "$EAS_PROJECT_ID" /tmp/kleenest-fleet-config.txt
+          grep -q 'com.kleenest.fleet' /tmp/kleenest-fleet-config.txt
+      - name: Build signed Play bundle locally
+        run: |
+          set -euo pipefail
+          npx eas-cli@latest build --platform android --profile production --non-interactive --local --output "$GITHUB_WORKSPACE/Kleenest-Fleet-production.aab"
+          test -s Kleenest-Fleet-production.aab
+          unzip -t Kleenest-Fleet-production.aab >/dev/null
+          sha256sum Kleenest-Fleet-production.aab | tee Kleenest-Fleet-production.aab.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Kleenest-Fleet-Play-AAB-${{ github.run_id }}
+          path: |
+            Kleenest-Fleet-production.aab
+            Kleenest-Fleet-production.aab.sha256
+          if-no-files-found: error
+          retention-days: 30
