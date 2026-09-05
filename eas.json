@@ -1,0 +1,52 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "distribution": "internal",
+      "autoIncrement": true,
+      "channel": "fleet-development",
+      "env": {
+        "EAS_PROJECT_ID": "90d1d6ff-1376-4065-a00c-7cf0415e4347",
+        "EXPO_PUBLIC_OTA_CHANNEL": "fleet-development"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "autoIncrement": true,
+      "channel": "fleet-preview",
+      "env": {
+        "EAS_PROJECT_ID": "90d1d6ff-1376-4065-a00c-7cf0415e4347",
+        "EXPO_PUBLIC_OTA_CHANNEL": "fleet-preview"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "channel": "fleet-production",
+      "env": {
+        "EAS_PROJECT_ID": "90d1d6ff-1376-4065-a00c-7cf0415e4347",
+        "EXPO_PUBLIC_OTA_CHANNEL": "fleet-production"
+      },
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "ios": {
+        "resourceClass": "m-medium"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {},
+      "ios": {}
+    }
+  }
+}
