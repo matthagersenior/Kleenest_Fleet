@@ -24,15 +24,30 @@ const config: ExpoConfig = {
     config: { usesNonExemptEncryption: false },
     infoPlist: {
       NSLocationWhenInUseUsageDescription: 'Kleenest Fleet uses your location to plan, dispatch and execute routes with geofence-aware stops.',
+      NSLocationAlwaysAndWhenInUseUsageDescription: 'Kleenest Fleet uses background location only when you enable Live Network route execution and geofence-aware stop alerts.',
+      UIBackgroundModes: ['location'],
     },
   },
   android: {
     package: 'com.kleenest.fleet',
     icon: './assets/app-icon.png',
-    permissions: ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION'],
+    permissions: ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION', 'ACCESS_BACKGROUND_LOCATION'],
+    blockedPermissions: ['android.permission.RECORD_AUDIO', 'android.permission.SYSTEM_ALERT_WINDOW'],
   },
   web: { output: 'single', bundler: 'metro', name: 'Kleenest Fleet', shortName: 'Kleenest Fleet' },
-  plugins: ['expo-router', 'expo-location', 'expo-secure-store', '@maplibre/maplibre-react-native'],
+  plugins: [
+    'expo-router',
+    ['expo-location', {
+      locationWhenInUsePermission: 'Kleenest Fleet uses your location to plan, dispatch and execute routes with geofence-aware stops.',
+      locationAlwaysAndWhenInUsePermission: 'Kleenest Fleet uses background location only when you enable Live Network route execution and geofence-aware stop alerts.',
+      isAndroidBackgroundLocationEnabled: true,
+      isAndroidForegroundServiceEnabled: true,
+      isIosBackgroundLocationEnabled: true,
+    }],
+    ['expo-notifications', { defaultChannel: 'live-network' }],
+    'expo-secure-store',
+    '@maplibre/maplibre-react-native',
+  ],
   experiments: { typedRoutes: true, baseUrl: '/Kleenest_Fleet' },
   extra: {
     appRole: 'fleet',
