@@ -55,7 +55,7 @@ jobs:
       - name: Pre-package native and manifest diagnostics
         working-directory: android
         run: |
-          ./gradlew :app:processReleaseMainManifest :app:compileDebugKotlin --no-daemon
+          ./gradlew :app:processReleaseMainManifest --no-daemon
           find app/build/intermediates -path '*release*AndroidManifest.xml' -print -exec grep -n '<uses-permission' {} \; > /tmp/fleet-manifest-permissions.txt || true
           cat /tmp/fleet-manifest-permissions.txt
       - name: Verify standalone release dependency graph
