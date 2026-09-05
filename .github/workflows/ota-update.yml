@@ -66,5 +66,5 @@ jobs:
         run: npx eas-cli@latest update --channel fleet-production --message "Fleet ${GITHUB_SHA}" --non-interactive
       - name: Verify Fleet OTA is discoverable
         run: |
-          npx eas-cli@latest update:list --channel fleet-production --limit 1 --json --non-interactive > ota-latest.json
+          npx eas-cli@latest update:list --branch fleet-production --limit 1 --json --non-interactive > ota-latest.json
           grep -q "$GITHUB_SHA" ota-latest.json
