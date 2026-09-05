@@ -13,7 +13,6 @@ on:
       - 'app.config.ts'
       - 'eas.json'
       - 'package.json'
-      - 'package-lock.json'
 
 permissions:
   contents: read
@@ -33,7 +32,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
