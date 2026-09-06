@@ -5,7 +5,7 @@ import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { getSupabaseClient } from '@/lib/supabase';
 import { useFleetWorkspace } from '@/state/FleetWorkspace';
 
-const googleRedirect='kleenest-fleet://auth';
+const googleRedirect=Linking.createURL('auth',{scheme:'kleenest-fleet'});
 
 export default function FleetSignIn() {
   const router = useRouter();
