@@ -41,13 +41,39 @@ jobs:
           FLEET_JSON: ${{ secrets.FLEET_GOOGLE_SERVICES_JSON_BASE64 }}
           SHARED_JSON: ${{ secrets.KLEENEST_GOOGLE_SERVICES_JSON_BASE64 }}
           EXISTING_OWNER_JSON: ${{ secrets.OWNER_GOOGLE_SERVICES_JSON_BASE64 }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
           value="${FLEET_JSON:-}"
           [ -n "$value" ] || value="${SHARED_JSON:-}"
           [ -n "$value" ] || value="${EXISTING_OWNER_JSON:-}"
-          test -n "$value" || { echo 'No Firebase Android file secret is configured for Fleet.' >&2; exit 1; }
-          printf '%s' "$value" | base64 --decode > google-services.json
+          if [ -n "$value" ]; then
+            printf '%s' "$value" | base64 --decode > google-services.json
+          elif [ "$EVENT_NAME" = "pull_request" ]; then
+            cat > google-services.json <<'JSON'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "kleenest-ci-placeholder",
+              "storage_bucket": "kleenest-ci-placeholder.appspot.com"
+            },
+            "client": [{
+              "client_info": {
+                "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
+                "android_client_info": {"package_name": "com.kleenest.fleet"}
+              },
+              "oauth_client": [],
+              "api_key": [{"current_key": "AIzaSyCIPlaceholderNotForRuntimeUse000000"}],
+              "services": {"appinvite_service": {"other_platform_oauth_client": []}}
+            }],
+            "configuration_version": "1"
+          }
+          JSON
+            echo 'Using synthetic Firebase config for PR compile verification only.'
+          else
+            echo 'No Firebase Android file secret is configured for Fleet.' >&2
+            exit 1
+          fi
           node -e "const f=require('./google-services.json');if(!f.client?.some(c=>c.client_info?.android_client_info?.package_name==='com.kleenest.fleet'))throw new Error('Firebase file does not authorize com.kleenest.fleet')"
       - run: npm run audit
       - run: npm run typecheck
