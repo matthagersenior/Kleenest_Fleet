@@ -2,7 +2,7 @@ import Constants from 'expo-constants';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as TaskManager from 'expo-task-manager';
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import { getSupabaseClient } from '@/lib/supabase';
 
 export const FLEET_GEOFENCE_TASK='kleenest-fleet-live-network-geofence';
@@ -96,11 +96,16 @@ export async function getFleetLiveNetworkStatus(){
   return{foreground:foreground.status,background:background.status,services,registered};
 }
 
+export async function openFleetLiveNetworkLocationSettings(){
+  await Linking.openSettings();
+}
+
 export async function enableFleetLiveNetwork(businessId:string,routeId:string){
   const foreground=await Location.requestForegroundPermissionsAsync();
   if(foreground.status!=='granted')throw new Error('Location permission is required for Fleet Live Network.');
-  const background=await Location.requestBackgroundPermissionsAsync();
-  if(background.status!=='granted')throw new Error('Background location permission is required for route geofence alerts while Fleet is not open.');
+  let background=await Location.getBackgroundPermissionsAsync();
+  if(background.status!=='granted'&&Platform.OS!=='android')background=await Location.requestBackgroundPermissionsAsync();
+  if(background.status!=='granted')throw new Error('Background location is off. Open Kleenest Fleet location settings, choose Allow all the time, return to Fleet, then enable Live Network again.');
   const manifest=await getFleetRouteGeofenceManifest(businessId,routeId);
   if(!manifest.length)throw new Error('This route has no geofence-ready stops. Add canonical route stops before enabling Live Network.');
   const maximum=Platform.OS==='ios'?20:100;

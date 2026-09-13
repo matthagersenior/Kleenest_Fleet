@@ -16,7 +16,7 @@ export function getSupabaseClient(): SupabaseClient {
   const key = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   if (!url || !key) throw new Error('Missing Fleet Supabase environment variables.');
   singleton = createClient(url, key, {
-    auth: { storage, autoRefreshToken: true, persistSession: true, detectSessionInUrl: false },
+    auth: { storage, autoRefreshToken: true, persistSession: true, detectSessionInUrl: false, flowType: 'pkce' },
   });
   return singleton;
 }
