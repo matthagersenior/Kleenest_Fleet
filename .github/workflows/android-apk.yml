@@ -31,11 +31,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Install required Android NDK
-        run: |
-          SDKMANAGER=/usr/local/lib/android/sdk/cmdline-tools/16.0/bin/sdkmanager
-          yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "ndk;27.1.12297006"
       - name: Install and deduplicate dependencies
         run: |
           npm install --no-audit --no-fund
@@ -59,8 +54,21 @@ jobs:
           test -s android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp || test -s android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
       - name: Pre-package native and manifest diagnostics
         working-directory: android
+        shell: bash
         run: |
-          ./gradlew :app:processReleaseMainManifest --no-daemon
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          for attempt in 1 2 3; do
+            rm -rf "$SDK_ROOT/ndk/27.1.12297006" "$SDK_ROOT/.temp"
+            if ./gradlew :app:processReleaseMainManifest --no-daemon; then
+              break
+            fi
+            if [ "$attempt" = "3" ]; then
+              exit 1
+            fi
+            echo "Gradle Android SDK preparation attempt $attempt failed; clearing partial downloads before retry." >&2
+            sleep $((attempt * 5))
+          done
           find app/build/intermediates -path '*release*AndroidManifest.xml' -print -exec grep -n '<uses-permission' {} \; > /tmp/fleet-manifest-permissions.txt || true
           cat /tmp/fleet-manifest-permissions.txt
       - name: Verify standalone release dependency graph
