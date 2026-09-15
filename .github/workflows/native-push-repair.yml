@@ -86,21 +86,33 @@ jobs:
           node -e "const c=require('/tmp/expo.json');if(c.android?.package!=='com.kleenest.fleet'||!c.android?.googleServicesFile)process.exit(1)"
           npx expo prebuild --platform android --clean
           test -f android/app/google-services.json
-      - name: Build release APK
-        working-directory: android
+      - name: Ensure Android NDK 27 is valid
         shell: bash
         run: |
           set -euo pipefail
-          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          NDK_VERSION=27.1.12297006
+          NDK_DIR="$ANDROID_SDK_ROOT/ndk/$NDK_VERSION"
+          if [ -s "$NDK_DIR/source.properties" ]; then
+            echo "NDK $NDK_VERSION already valid."
+            exit 0
+          fi
           for attempt in 1 2 3; do
-            rm -rf "$SDK_ROOT/ndk/27.1.12297006" "$SDK_ROOT/.temp"
-            if ./gradlew assembleRelease --no-daemon --stacktrace; then
+            echo "Installing NDK $NDK_VERSION (attempt $attempt/3)..."
+            rm -rf "$NDK_DIR" "$ANDROID_SDK_ROOT/.temp" "$ANDROID_SDK_ROOT/temp" || true
+            set +o pipefail
+            yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" || true
+            set -o pipefail
+            if [ -s "$NDK_DIR/source.properties" ]; then
+              grep -E 'Pkg.Revision|Pkg.Desc' "$NDK_DIR/source.properties" || true
               exit 0
             fi
-            echo "Gradle release attempt $attempt failed; clearing partial Android SDK downloads before retry." >&2
             sleep $((attempt * 5))
           done
+          echo "Unable to install a valid NDK $NDK_VERSION after 3 attempts." >&2
           exit 1
+      - name: Build release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
       - name: Stage candidate
         shell: bash
         run: |
