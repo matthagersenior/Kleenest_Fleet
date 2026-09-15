@@ -20,13 +20,14 @@ permissions:
 jobs:
   store-aab:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       EAS_PROJECT_ID: 90d1d6ff-1376-4065-a00c-7cf0415e4347
       EXPO_PUBLIC_OTA_CHANNEL: fleet-production
       EXPO_PUBLIC_SUPABASE_URL: https://ssgesjzdvdsqacdtasje.supabase.co
       EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_f1rbczgvWKSQy2g9mTDQZg_K9Wv19bL
+      GRADLE_OPTS: '-Dorg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8 -Dkotlin.daemon.jvm.options=-Xmx2g'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
