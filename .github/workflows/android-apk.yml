@@ -31,6 +31,9 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install required Android NDK
+        run: sdkmanager "ndk;27.1.12297006"
       - name: Install and deduplicate dependencies
         run: |
           npm install --no-audit --no-fund
