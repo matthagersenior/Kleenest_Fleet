@@ -35,11 +35,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Install required Android NDK
-        run: |
-          SDKMANAGER=/usr/local/lib/android/sdk/cmdline-tools/16.0/bin/sdkmanager
-          yes | "$SDKMANAGER" --licenses >/dev/null || true
-          "$SDKMANAGER" "ndk;27.1.12297006"
       - run: npm install --no-audit --no-fund
       - name: Materialize Firebase Android config securely
         shell: bash
@@ -93,7 +88,19 @@ jobs:
           test -f android/app/google-services.json
       - name: Build release APK
         working-directory: android
-        run: ./gradlew assembleRelease --no-daemon --stacktrace
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          for attempt in 1 2 3; do
+            rm -rf "$SDK_ROOT/ndk/27.1.12297006" "$SDK_ROOT/.temp"
+            if ./gradlew assembleRelease --no-daemon --stacktrace; then
+              exit 0
+            fi
+            echo "Gradle release attempt $attempt failed; clearing partial Android SDK downloads before retry." >&2
+            sleep $((attempt * 5))
+          done
+          exit 1
       - name: Stage candidate
         shell: bash
         run: |
