@@ -52,23 +52,34 @@ jobs:
           node scripts/apply-native-launcher-icon.mjs
           test -s android/app/src/main/res/mipmap-mdpi/ic_launcher.webp || test -s android/app/src/main/res/mipmap-mdpi/ic_launcher.png
           test -s android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp || test -s android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
-      - name: Pre-package native and manifest diagnostics
-        working-directory: android
+      - name: Ensure Android NDK 27 is valid
         shell: bash
         run: |
           set -euo pipefail
-          SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          NDK_VERSION=27.1.12297006
+          NDK_DIR="$ANDROID_SDK_ROOT/ndk/$NDK_VERSION"
+          if [ -s "$NDK_DIR/source.properties" ]; then
+            echo "NDK $NDK_VERSION already valid."
+            exit 0
+          fi
           for attempt in 1 2 3; do
-            rm -rf "$SDK_ROOT/ndk/27.1.12297006" "$SDK_ROOT/.temp"
-            if ./gradlew :app:processReleaseMainManifest --no-daemon; then
-              break
+            echo "Installing NDK $NDK_VERSION (attempt $attempt/3)..."
+            rm -rf "$NDK_DIR" "$ANDROID_SDK_ROOT/.temp" "$ANDROID_SDK_ROOT/temp" || true
+            set +o pipefail
+            yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --install "ndk;$NDK_VERSION" || true
+            set -o pipefail
+            if [ -s "$NDK_DIR/source.properties" ]; then
+              grep -E 'Pkg.Revision|Pkg.Desc' "$NDK_DIR/source.properties" || true
+              exit 0
             fi
-            if [ "$attempt" = "3" ]; then
-              exit 1
-            fi
-            echo "Gradle Android SDK preparation attempt $attempt failed; clearing partial downloads before retry." >&2
             sleep $((attempt * 5))
           done
+          echo "Unable to install a valid NDK $NDK_VERSION after 3 attempts." >&2
+          exit 1
+      - name: Pre-package native and manifest diagnostics
+        working-directory: android
+        run: |
+          ./gradlew :app:processReleaseMainManifest --no-daemon
           find app/build/intermediates -path '*release*AndroidManifest.xml' -print -exec grep -n '<uses-permission' {} \; > /tmp/fleet-manifest-permissions.txt || true
           cat /tmp/fleet-manifest-permissions.txt
       - name: Verify standalone release dependency graph
