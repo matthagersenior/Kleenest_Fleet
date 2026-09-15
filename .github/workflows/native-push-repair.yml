@@ -35,9 +35,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
       - name: Install required Android NDK
-        run: sdkmanager "ndk;27.1.12297006"
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "ndk;27.1.12297006"
       - run: npm install --no-audit --no-fund
       - name: Materialize Firebase Android config securely
         shell: bash
