@@ -42,6 +42,39 @@ jobs:
               per_page: 100,
             });
 
+            const mergedPulls = await github.paginate(github.rest.pulls.list, {
+              owner,
+              repo,
+              state: 'closed',
+              base: 'main',
+              per_page: 100,
+            });
+            for (const mergedPr of mergedPulls) {
+              if (!mergedPr.merged_at || !mergedPr.head.repo || mergedPr.head.repo.full_name !== repoFullName || mergedPr.head.ref === 'main') {
+                continue;
+              }
+              try {
+                const currentRef = await github.rest.git.getRef({
+                  owner,
+                  repo,
+                  ref: 'heads/' + mergedPr.head.ref,
+                });
+                if (currentRef.data.object.sha !== mergedPr.head.sha) {
+                  continue;
+                }
+                await github.rest.git.deleteRef({
+                  owner,
+                  repo,
+                  ref: 'heads/' + mergedPr.head.ref,
+                });
+                core.info('Deleted merged branch: ' + mergedPr.head.ref);
+              } catch (error) {
+                if (error.status !== 404) {
+                  core.warning('Merged branch cleanup failed for ' + mergedPr.head.ref + ': ' + error.message);
+                }
+              }
+            }
+
             for (const pr of prs) {
               core.info('PR #' + pr.number + ': ' + pr.title);
 
